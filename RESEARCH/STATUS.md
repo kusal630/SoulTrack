@@ -1,6 +1,6 @@
 # Status
 
-## Current Version: v1.6.0
+## Current Version: v1.7.0-dev
 
 ## Completed
 - [x] Basic timer with foreground service
@@ -13,14 +13,18 @@
 - [x] Todo integration with pomodoro
 - [x] Quote and pomodoro widgets
 - [x] F-Droid build compatibility
+- [x] Timer UI overhaul (premium circular design)
+- [x] Quote system anti-repetition (24h, context-aware, category-based)
+- [x] Pomodoro immersive redesign (gradient ring, ambient background, haptic)
+- [x] Dashboard visual hierarchy (animated score ring)
+- [x] All ArrowBack icons migrated to AutoMirrored
 
 ## In Progress
-- [x] Timer UI overhaul (premium circular design) — DONE
-- [x] Quote system anti-repetition — DONE
-- [x] Pomodoro immersive redesign — DONE
-- [ ] Dashboard visual hierarchy
-- [ ] Design system documentation
+- [x] Quote deduplication (removed 18 duplicates across 16 categories)
+- [x] Quote weighted random selection (author diversity algorithm)
+- [x] Timer UI premium glow effects (dual-layer blur, refined spacing)
 - [ ] Micro-interactions and polish
+- [ ] Navigation improvements
 
 ## Next Up
 - DESIGN.md creation

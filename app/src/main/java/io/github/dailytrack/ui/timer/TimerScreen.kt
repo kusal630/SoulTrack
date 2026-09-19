@@ -219,29 +219,39 @@ fun TimerScreen(
 
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(280.dp)
+                    modifier = Modifier.size(300.dp)
                 ) {
                     if (isRunning) {
                         Canvas(
                             modifier = Modifier
-                                .size(280.dp)
-                                .blur(16.dp)
+                                .size(320.dp)
+                                .blur(24.dp)
                         ) {
                             drawCircle(
-                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.4f),
+                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.35f),
+                                radius = size.minDimension / 2
+                            )
+                        }
+                        Canvas(
+                            modifier = Modifier
+                                .size(300.dp)
+                                .blur(8.dp)
+                        ) {
+                            drawCircle(
+                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.2f),
                                 radius = size.minDimension / 2
                             )
                         }
                     }
 
-                    Canvas(modifier = Modifier.size(260.dp)) {
-                        val strokeWidth = 10.dp.toPx()
+                    Canvas(modifier = Modifier.size(280.dp)) {
+                        val strokeWidth = 8.dp.toPx()
                         val diameter = size.minDimension - strokeWidth
                         val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
                         val arcSize = Size(diameter, diameter)
 
                         drawArc(
-                            color = Color.Gray.copy(alpha = 0.15f),
+                            color = Color.Gray.copy(alpha = 0.08f),
                             startAngle = -90f,
                             sweepAngle = 360f,
                             useCenter = false,
@@ -255,7 +265,7 @@ fun TimerScreen(
                                 brush = Brush.sweepGradient(
                                     colors = listOf(
                                         animatedCategoryColor,
-                                        animatedCategoryColor.copy(alpha = 0.6f),
+                                        animatedCategoryColor.copy(alpha = 0.5f),
                                         animatedCategoryColor
                                     )
                                 ),
@@ -279,12 +289,12 @@ fun TimerScreen(
                                 "%02d:%02d:%02d",
                                 hours, minutes, seconds
                             ),
-                            fontSize = 52.sp,
-                            fontWeight = FontWeight.Thin,
-                            fontFamily = FontFamily.Monospace,
+                            fontSize = 56.sp,
+                            fontWeight = FontWeight.Light,
+                            fontFamily = FontFamily.SansSerif,
                             color = if (isRunning) animatedCategoryColor
                             else MaterialTheme.colorScheme.onSurface,
-                            letterSpacing = 2.sp
+                            letterSpacing = 4.sp
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
