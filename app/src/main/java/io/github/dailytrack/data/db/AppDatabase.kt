@@ -45,9 +45,11 @@ import io.github.dailytrack.data.db.entity.*
         TodoEntity::class,
         PomodoroSessionEntity::class,
         SavedQuoteEntity::class,
-        SubtaskEntity::class
+        SubtaskEntity::class,
+        HabitEntity::class,
+        HabitCompletionEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -67,6 +69,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pomodoroSessionDao(): PomodoroSessionDao
     abstract fun savedQuoteDao(): SavedQuoteDao
     abstract fun subtaskDao(): SubtaskDao
+    abstract fun habitDao(): HabitDao
 
     companion object {
         @Volatile
@@ -88,6 +91,37 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS habits (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
+                        icon TEXT NOT NULL DEFAULT '⭐',
+                        color TEXT NOT NULL DEFAULT '#10B981',
+                        frequency TEXT NOT NULL DEFAULT 'DAILY',
+                        targetCount INTEGER NOT NULL DEFAULT 1,
+                        currentStreak INTEGER NOT NULL DEFAULT 0,
+                        bestStreak INTEGER NOT NULL DEFAULT 0,
+                        totalCompletions INTEGER NOT NULL DEFAULT 0,
+                        lastCompletedDate INTEGER,
+                        createdAt INTEGER NOT NULL DEFAULT 0,
+                        isArchived INTEGER NOT NULL DEFAULT 0,
+                        sortOrder INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS habit_completions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        habitId INTEGER NOT NULL,
+                        completedDate INTEGER NOT NULL,
+                        notes TEXT NOT NULL DEFAULT ''
+                    )
+                """)
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -95,7 +129,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "soultrack.db"
                 )
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance

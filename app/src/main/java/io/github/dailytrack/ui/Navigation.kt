@@ -43,6 +43,7 @@ import io.github.dailytrack.ui.growth.GrowthScreen
 import io.github.dailytrack.ui.settings.SettingsScreen
 import io.github.dailytrack.ui.savedquotes.SavedQuotesScreen
 import io.github.dailytrack.ui.sync.SyncSettingsScreen
+import io.github.dailytrack.ui.habit.HabitScreen
 import io.github.dailytrack.ui.theme.ProductiveColor
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
@@ -55,6 +56,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Settings : Screen("settings", "Settings", Icons.Default.Settings)
     data object SavedQuotes : Screen("saved_quotes", "Saved Quotes", Icons.Default.Favorite)
     data object SyncSettings : Screen("sync_settings", "Sync", Icons.Default.Sync)
+    data object Habits : Screen("habits", "Habits", Icons.Default.Flag)
 }
 
 val bottomNavItems = listOf(
@@ -148,6 +150,8 @@ fun DailyTrackNavHost() {
             composable(Screen.SavedQuotes.route) { SavedQuotesScreen(navController) }
             composable(Screen.SyncSettings.route) {
                 SyncSettingsScreen(navController, app.syncManager)
+            }
+            composable(Screen.Habits.route) {
             }
         }
     }
