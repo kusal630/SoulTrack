@@ -15,9 +15,9 @@
 - [x] F-Droid build compatibility
 
 ## In Progress
-- [ ] Timer UI overhaul (premium circular design)
-- [ ] Pomodoro immersive redesign
-- [ ] Quote system anti-repetition
+- [x] Timer UI overhaul (premium circular design) — DONE
+- [x] Quote system anti-repetition — DONE
+- [x] Pomodoro immersive redesign — DONE
 - [ ] Dashboard visual hierarchy
 - [ ] Design system documentation
 - [ ] Micro-interactions and polish

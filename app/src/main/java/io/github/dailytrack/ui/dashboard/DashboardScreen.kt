@@ -17,16 +17,25 @@
 
 package io.github.dailytrack.ui.dashboard
 
+import androidx.compose.animation.core.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -493,11 +502,34 @@ fun CompletedSessionCard(
 
 @Composable
 fun GrowthScoreCard(score: Double) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val animatedScore by animateFloatAsState(
+        targetValue = score.toFloat(),
+        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+        label = "score"
+    )
+
+    val scoreColor = when {
+        score >= 70 -> Color(0xFF2E7D32)
+        score >= 40 -> Color(0xFFF57C00)
+        else -> Color(0xFFC62828)
+    }
+
+    val animatedScoreColor by animateColorAsState(
+        targetValue = scoreColor,
+        animationSpec = tween(600),
+        label = "score_color"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = scoreColor.copy(alpha = 0.08f)
+        )
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -507,22 +539,58 @@ fun GrowthScoreCard(score: Double) {
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Today's progress",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { (animatedScore / 100f).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .width(120.dp)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = animatedScoreColor,
+                    trackColor = animatedScoreColor.copy(alpha = 0.15f)
+                )
             }
-            Text(
-                text = "${score.toInt()}",
-                style = MaterialTheme.typography.displaySmall,
-                color = when {
-                    score >= 70 -> Color(0xFF2E7D32)
-                    score >= 40 -> Color(0xFFF57C00)
-                    else -> Color(0xFFC62828)
-                },
-                fontWeight = FontWeight.Bold
-            )
+
+            Box(contentAlignment = Alignment.Center) {
+                Canvas(modifier = Modifier.size(72.dp)) {
+                    val strokeWidth = 6.dp.toPx()
+                    val diameter = size.minDimension - strokeWidth
+                    val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
+                    val arcSize = Size(diameter, diameter)
+
+                    drawArc(
+                        color = Color.Gray.copy(alpha = 0.12f),
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    )
+
+                    drawArc(
+                        color = animatedScoreColor,
+                        startAngle = -90f,
+                        sweepAngle = 360f * (animatedScore / 100f).coerceIn(0f, 1f),
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    )
+                }
+                Text(
+                    text = "${score.toInt()}",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = animatedScoreColor,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
