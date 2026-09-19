@@ -48,9 +48,11 @@ import io.github.dailytrack.data.db.entity.*
         SubtaskEntity::class,
         HabitEntity::class,
         HabitCompletionEntity::class,
-        GoalEntity::class
+        GoalEntity::class,
+        AchievementEntity::class,
+        UserStatsEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -72,6 +74,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun subtaskDao(): SubtaskDao
     abstract fun habitDao(): HabitDao
     abstract fun goalDao(): GoalDao
+    abstract fun achievementDao(): AchievementDao
 
     companion object {
         @Volatile
@@ -145,6 +148,37 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS achievements (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        icon TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        targetValue INTEGER NOT NULL,
+                        currentValue INTEGER NOT NULL DEFAULT 0,
+                        isUnlocked INTEGER NOT NULL DEFAULT 0,
+                        unlockedAt INTEGER,
+                        xpReward INTEGER NOT NULL DEFAULT 100
+                    )
+                """)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS user_stats (
+                        id INTEGER PRIMARY KEY NOT NULL,
+                        totalXp INTEGER NOT NULL DEFAULT 0,
+                        level INTEGER NOT NULL DEFAULT 1,
+                        totalHoursTracked REAL NOT NULL DEFAULT 0.0,
+                        totalHabitsCompleted INTEGER NOT NULL DEFAULT 0,
+                        totalGoalsAchieved INTEGER NOT NULL DEFAULT 0,
+                        longestStreak INTEGER NOT NULL DEFAULT 0,
+                        achievementsUnlocked INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -152,7 +186,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "soultrack.db"
                 )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance
