@@ -333,9 +333,9 @@ fun GradientText(
         text = text,
         modifier = modifier,
         style = MaterialTheme.typography.headlineLarge.copy(
-            fontWeight = FontWeight.Bold
-        ),
-        brush = gradient
+            fontWeight = FontWeight.Bold,
+            brush = gradient
+        )
     )
 }
 
