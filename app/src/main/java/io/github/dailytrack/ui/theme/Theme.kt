@@ -1,20 +1,3 @@
-/*
- * Copyright 2024 Soul Track Contributors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-
 package io.github.dailytrack.ui.theme
 
 import android.os.Build
@@ -23,6 +6,33 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+
+// Semantic Colors for Categories
+val ProductiveColor = Color(0xFF10B981)
+val WastedColor = Color(0xFFEF4444)
+val ExerciseColor = Color(0xFFF59E0B)
+val LearningColor = Color(0xFF3B82F6)
+val SocialColor = Color(0xFF8B5CF6)
+val SleepColor = Color(0xFF6366F1)
+val RecoveryColor = Color(0xFF34D399)
+val NeutralColor = Color(0xFF6B7280)
+
+// Gradient Colors
+val GradientStart = Color(0xFFE94560)
+val GradientMid = Color(0xFF0F3460)
+val GradientEnd = Color(0xFF533483)
+
+val ProductiveGradient = listOf(Color(0xFF10B981), Color(0xFF059669))
+val WastedGradient = listOf(Color(0xFFEF4444), Color(0xFFDC2626))
+val ExerciseGradient = listOf(Color(0xFFF59E0B), Color(0xFFD97706))
+val LearningGradient = listOf(Color(0xFF3B82F6), Color(0xFF2563EB))
+val SocialGradient = listOf(Color(0xFF8B5CF6), Color(0xFF7C3AED))
+val SleepGradient = listOf(Color(0xFF6366F1), Color(0xFF4F46E5))
+
+// Glass Morphism Colors
+val GlassLight = Color(0x1AFFFFFF)
+val GlassDark = Color(0x1A000000)
+val GlassBorder = Color(0x33FFFFFF)
 
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFFE94560),
@@ -43,6 +53,9 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = Color(0xFFE3E2E6),
     surfaceVariant = Color(0xFF1A1A25),
     onSurfaceVariant = Color(0xFFC7C5CA),
+    surfaceContainer = Color(0xFF1E1E28),
+    surfaceContainerHigh = Color(0xFF252530),
+    surfaceContainerHighest = Color(0xFF2D2D38),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF93000A),
@@ -71,6 +84,9 @@ private val LightColorScheme = lightColorScheme(
     onSurface = Color(0xFF1B1B1F),
     surfaceVariant = Color(0xFFF3DDE1),
     onSurfaceVariant = Color(0xFF514347),
+    surfaceContainer = Color(0xFFF5F5F5),
+    surfaceContainerHigh = Color(0xFFEEEEEE),
+    surfaceContainerHighest = Color(0xFFE0E0E0),
     error = Color(0xFFBA1A1A),
     onError = Color.White,
     errorContainer = Color(0xFFFFDAD6),
@@ -97,7 +113,7 @@ fun SoulTrackTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography(),
+        typography = SoulTrackTypography,
         content = content
     )
 }

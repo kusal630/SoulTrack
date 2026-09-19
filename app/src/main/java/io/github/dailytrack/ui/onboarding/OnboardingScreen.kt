@@ -1,6 +1,7 @@
 package io.github.dailytrack.ui.onboarding
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -13,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -22,6 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.dailytrack.ui.theme.GradientEnd
+import io.github.dailytrack.ui.theme.GradientMid
+import io.github.dailytrack.ui.theme.GradientStart
 import kotlinx.coroutines.launch
 
 data class OnboardingPage(
@@ -90,9 +95,9 @@ fun OnboardingScreen(onComplete: () -> Unit) {
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF0F0F23),
-                        Color(0xFF1A1A2E),
-                        Color(0xFF16213E)
+                        GradientStart.copy(alpha = 0.3f),
+                        GradientMid.copy(alpha = 0.5f),
+                        GradientEnd.copy(alpha = 0.3f)
                     )
                 )
             )
@@ -131,16 +136,27 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 repeat(pages.size) { index ->
+                    val isSelected = pagerState.currentPage == index
+                    val scale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.3f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "indicator_scale"
+                    )
+
                     Box(
                         modifier = Modifier
                             .padding(4.dp)
-                            .size(if (pagerState.currentPage == index) 12.dp else 8.dp)
+                            .scale(scale)
+                            .size(if (isSelected) 12.dp else 8.dp)
                             .clip(RoundedCornerShape(6.dp))
                             .background(
-                                if (pagerState.currentPage == index)
-                                    Color(0xFFE94560)
+                                if (isSelected)
+                                    GradientStart
                                 else
-                                    Color(0xFF40FFFFFF)
+                                    Color.White.copy(alpha = 0.4f)
                             )
                     )
                 }
@@ -160,7 +176,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                             }
                         }
                     ) {
-                        Text("Back", color = Color(0xFFB0FFFFFF))
+                        Text("Back", color = Color.White.copy(alpha = 0.8f))
                     }
                 } else {
                     Spacer(modifier = Modifier.width(80.dp))
@@ -174,9 +190,13 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFE94560)
+                            containerColor = GradientStart
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 4.dp,
+                            pressedElevation = 8.dp
+                        )
                     ) {
                         Text("Next")
                     }
@@ -184,9 +204,13 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                     Button(
                         onClick = onComplete,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFE94560)
+                            containerColor = GradientStart
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 4.dp,
+                            pressedElevation = 8.dp
+                        )
                     ) {
                         Text("Get Started")
                     }
@@ -208,7 +232,7 @@ fun OnboardingPageContent(page: OnboardingPage) {
         Icon(
             imageVector = page.icon,
             contentDescription = null,
-            tint = Color(0xFFE94560),
+            tint = GradientStart,
             modifier = Modifier.size(64.dp)
         )
 
@@ -227,7 +251,7 @@ fun OnboardingPageContent(page: OnboardingPage) {
         if (page.isQuote) {
             Text(
                 text = page.subtitle,
-                color = Color(0xFFE94560),
+                color = GradientStart,
                 fontSize = 18.sp,
                 fontStyle = FontStyle.Italic,
                 fontFamily = FontFamily.Serif,
@@ -237,7 +261,7 @@ fun OnboardingPageContent(page: OnboardingPage) {
         } else {
             Text(
                 text = page.subtitle,
-                color = Color(0xFFB0FFFFFF),
+                color = Color.White.copy(alpha = 0.8f),
                 fontSize = 16.sp,
                 textAlign = TextAlign.Center
             )
@@ -248,13 +272,13 @@ fun OnboardingPageContent(page: OnboardingPage) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF1E1E3F).copy(alpha = 0.6f)
+                containerColor = Color.White.copy(alpha = 0.1f)
             ),
             shape = RoundedCornerShape(16.dp)
         ) {
             Text(
                 text = page.description,
-                color = Color(0xFFD0D0D0),
+                color = Color.White.copy(alpha = 0.9f),
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(20.dp),

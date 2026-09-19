@@ -43,6 +43,7 @@ import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SessionEntity
 import io.github.dailytrack.ui.Screen
 import io.github.dailytrack.ui.components.*
+import io.github.dailytrack.ui.theme.*
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import java.time.LocalDate
 import java.time.ZoneId
@@ -123,13 +124,13 @@ fun DashboardScreen(
                 item {
                     TimeBreakdownPieChart(
                         data = listOf(
-                            PieChartData("Productive", (todayCoverage!!.productiveSeconds + todayCoverage!!.learningSeconds).toFloat(), Color(0xFF2E7D32)),
-                            PieChartData("Exercise", todayCoverage!!.exerciseSeconds.toFloat(), Color(0xFFE65100)),
-                            PieChartData("Sleep", todayCoverage!!.sleepSeconds.toFloat(), Color(0xFF311B92)),
-                            PieChartData("Social", todayCoverage!!.socialSeconds.toFloat(), Color(0xFF6A1B9A)),
-                            PieChartData("Recovery", todayCoverage!!.recoverySeconds.toFloat(), Color(0xFF4CAF50)),
-                            PieChartData("Wasted", todayCoverage!!.wastedSeconds.toFloat(), Color(0xFFC62828)),
-                            PieChartData("Untracked", todayCoverage!!.untrackedSeconds.toFloat(), Color(0xFF757575))
+                            PieChartData("Productive", (todayCoverage!!.productiveSeconds + todayCoverage!!.learningSeconds).toFloat(), ProductiveColor),
+                            PieChartData("Exercise", todayCoverage!!.exerciseSeconds.toFloat(), ExerciseColor),
+                            PieChartData("Sleep", todayCoverage!!.sleepSeconds.toFloat(), SleepColor),
+                            PieChartData("Social", todayCoverage!!.socialSeconds.toFloat(), SocialColor),
+                            PieChartData("Recovery", todayCoverage!!.recoverySeconds.toFloat(), RecoveryColor),
+                            PieChartData("Wasted", todayCoverage!!.wastedSeconds.toFloat(), WastedColor),
+                            PieChartData("Untracked", todayCoverage!!.untrackedSeconds.toFloat(), NeutralColor)
                         ).filter { it.value > 0f }
                     )
                 }
@@ -356,17 +357,17 @@ fun TimeTrackingCard(coverage: io.github.dailytrack.engine.TimeCoverage?) {
                     MetricItem(
                         "Productive",
                         formatDurationHMS((coverage?.productiveSeconds ?: 0) + (coverage?.learningSeconds ?: 0)),
-                        Color(0xFF2E7D32)
+                        ProductiveColor
                     )
                     MetricItem(
                         "Exercise",
                         formatDurationHMS(coverage?.exerciseSeconds ?: 0),
-                        Color(0xFFE65100)
+                        ExerciseColor
                     )
                     MetricItem(
                         "Sleep",
                         formatDurationHMS(coverage?.sleepSeconds ?: 0),
-                        Color(0xFF311B92)
+                        SleepColor
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -377,7 +378,7 @@ fun TimeTrackingCard(coverage: io.github.dailytrack.engine.TimeCoverage?) {
                     MetricItem(
                         "Wasted",
                         formatDurationHMS(coverage?.wastedSeconds ?: 0),
-                        Color(0xFFC62828)
+                        WastedColor
                     )
                     MetricItem(
                         "Tracked",
@@ -387,7 +388,7 @@ fun TimeTrackingCard(coverage: io.github.dailytrack.engine.TimeCoverage?) {
                     MetricItem(
                         "Free",
                         formatDurationHMS(coverage?.untrackedSeconds ?: 0),
-                        Color(0xFF757575)
+                        NeutralColor
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -460,7 +461,7 @@ fun CompletedSessionCard(
             Icon(
                 Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = Color(0xFF2E7D32),
+                tint = ProductiveColor,
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -509,9 +510,9 @@ fun GrowthScoreCard(score: Double) {
     )
 
     val scoreColor = when {
-        score >= 70 -> Color(0xFF2E7D32)
-        score >= 40 -> Color(0xFFF57C00)
-        else -> Color(0xFFC62828)
+        score >= 70 -> ProductiveColor
+        score >= 40 -> ExerciseColor
+        else -> WastedColor
     }
 
     val animatedScoreColor by animateColorAsState(

@@ -18,14 +18,19 @@
 package io.github.dailytrack.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import io.github.dailytrack.SoulTrackApp
@@ -38,6 +43,7 @@ import io.github.dailytrack.ui.growth.GrowthScreen
 import io.github.dailytrack.ui.settings.SettingsScreen
 import io.github.dailytrack.ui.savedquotes.SavedQuotesScreen
 import io.github.dailytrack.ui.sync.SyncSettingsScreen
+import io.github.dailytrack.ui.theme.ProductiveColor
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     data object Dashboard : Screen("dashboard", "Home", Icons.Default.Home)
@@ -78,12 +84,36 @@ fun DailyTrackNavHost() {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp
+            ) {
                 bottomNavItems.forEach { screen ->
+                    val isSelected = currentRoute == screen.route
+                    val scale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.1f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "nav_scale"
+                    )
+
                     NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
-                        label = { Text(screen.title) },
-                        selected = currentRoute == screen.route,
+                        icon = {
+                            Icon(
+                                screen.icon,
+                                contentDescription = screen.title,
+                                modifier = Modifier.scale(scale)
+                            )
+                        },
+                        label = {
+                            Text(
+                                screen.title,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        },
+                        selected = isSelected,
                         onClick = {
                             navController.navigate(screen.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
@@ -92,7 +122,12 @@ fun DailyTrackNavHost() {
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                        }
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                        )
                     )
                 }
             }

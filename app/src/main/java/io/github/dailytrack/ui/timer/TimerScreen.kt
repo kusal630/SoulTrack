@@ -67,19 +67,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.service.TimerForegroundService
-import io.github.dailytrack.ui.theme.SoulTrackTheme
+import io.github.dailytrack.ui.theme.*
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import kotlin.math.sin
-
-private val ProductiveColor = Color(0xFF2E7D32)
-private val WastedColor = Color(0xFFC62828)
-private val ExerciseColor = Color(0xFFE65100)
-private val LearningColor = Color(0xFF1565C0)
-private val SocialColor = Color(0xFF6A1B9A)
-private val SleepColor = Color(0xFF311B92)
-private val RecoveryColor = Color(0xFF4CAF50)
-private val NeutralColor = Color(0xFF757575)
 
 private fun getCategoryColor(type: String): Color = when (type) {
     "PRODUCTIVE" -> ProductiveColor
@@ -219,39 +210,49 @@ fun TimerScreen(
 
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(300.dp)
+                    modifier = Modifier.size(320.dp)
                 ) {
                     if (isRunning) {
                         Canvas(
                             modifier = Modifier
-                                .size(320.dp)
-                                .blur(24.dp)
+                                .size(360.dp)
+                                .blur(32.dp)
                         ) {
                             drawCircle(
-                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.35f),
+                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.4f),
                                 radius = size.minDimension / 2
                             )
                         }
                         Canvas(
                             modifier = Modifier
-                                .size(300.dp)
-                                .blur(8.dp)
+                                .size(340.dp)
+                                .blur(12.dp)
                         ) {
                             drawCircle(
-                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.2f),
+                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.25f),
+                                radius = size.minDimension / 2
+                            )
+                        }
+                        Canvas(
+                            modifier = Modifier
+                                .size(320.dp)
+                                .blur(4.dp)
+                        ) {
+                            drawCircle(
+                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.15f),
                                 radius = size.minDimension / 2
                             )
                         }
                     }
 
-                    Canvas(modifier = Modifier.size(280.dp)) {
-                        val strokeWidth = 8.dp.toPx()
+                    Canvas(modifier = Modifier.size(300.dp)) {
+                        val strokeWidth = 10.dp.toPx()
                         val diameter = size.minDimension - strokeWidth
                         val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
                         val arcSize = Size(diameter, diameter)
 
                         drawArc(
-                            color = Color.Gray.copy(alpha = 0.08f),
+                            color = Color.Gray.copy(alpha = 0.1f),
                             startAngle = -90f,
                             sweepAngle = 360f,
                             useCenter = false,
@@ -265,7 +266,9 @@ fun TimerScreen(
                                 brush = Brush.sweepGradient(
                                     colors = listOf(
                                         animatedCategoryColor,
-                                        animatedCategoryColor.copy(alpha = 0.5f),
+                                        animatedCategoryColor.copy(alpha = 0.6f),
+                                        animatedCategoryColor,
+                                        animatedCategoryColor.copy(alpha = 0.6f),
                                         animatedCategoryColor
                                     )
                                 ),
@@ -289,12 +292,10 @@ fun TimerScreen(
                                 "%02d:%02d:%02d",
                                 hours, minutes, seconds
                             ),
-                            fontSize = 56.sp,
-                            fontWeight = FontWeight.Light,
-                            fontFamily = FontFamily.SansSerif,
+                            style = MaterialTheme.typography.displayLarge,
                             color = if (isRunning) animatedCategoryColor
                             else MaterialTheme.colorScheme.onSurface,
-                            letterSpacing = 4.sp
+                            letterSpacing = 2.sp
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -311,7 +312,7 @@ fun TimerScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = selectedCategory?.name ?: "",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.labelMedium,
                                 color = animatedCategoryColor.copy(alpha = 0.7f)
                             )
                         }
@@ -337,7 +338,7 @@ fun TimerScreen(
                         .take(8)
 
                     LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         items(quickCategories) { category ->
@@ -354,7 +355,8 @@ fun TimerScreen(
                                 label = {
                                     Text(
                                         category.name,
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                                     )
                                 },
                                 leadingIcon = if (isSelected) {
@@ -369,14 +371,16 @@ fun TimerScreen(
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = chipColor.copy(alpha = 0.2f),
                                     selectedLabelColor = chipColor,
-                                    selectedLeadingIconColor = chipColor
+                                    selectedLeadingIconColor = chipColor,
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                                 ),
                                 border = FilterChipDefaults.filterChipBorder(
-                                    borderColor = chipColor.copy(alpha = 0.3f),
+                                    borderColor = chipColor.copy(alpha = 0.2f),
                                     selectedBorderColor = chipColor,
                                     enabled = true,
                                     selected = isSelected
-                                )
+                                ),
+                                shape = RoundedCornerShape(20.dp)
                             )
                         }
                     }
@@ -438,6 +442,10 @@ fun TimerScreen(
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 4.dp,
+                            pressedElevation = 8.dp
                         )
                     ) {
                         Icon(
@@ -448,7 +456,7 @@ fun TimerScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "Start Tracking",
-                            fontSize = 16.sp,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -469,6 +477,10 @@ fun TimerScreen(
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 4.dp,
+                            pressedElevation = 8.dp
                         )
                     ) {
                         Icon(
@@ -479,7 +491,7 @@ fun TimerScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             "Stop",
-                            fontSize = 16.sp,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -491,10 +503,13 @@ fun TimerScreen(
                         colors = CardDefaults.cardColors(
                             containerColor = animatedCategoryColor.copy(alpha = 0.08f)
                         ),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(20.dp),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = 2.dp
+                        )
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp)
+                            modifier = Modifier.padding(20.dp)
                         ) {
                             DetailRow("Duration", String.format(
                                 java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds
