@@ -126,6 +126,37 @@ fun SettingsScreen(navController: NavController) {
             }
 
             item {
+                var selectedTheme by remember { mutableStateOf("SYSTEM") }
+                val themes = listOf("LIGHT", "DARK", "AMOLED", "SYSTEM")
+                
+                SettingsSection(title = "Appearance", icon = Icons.Default.Palette) {
+                    Text(
+                        "Theme",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        themes.forEach { theme ->
+                            FilterChip(
+                                selected = selectedTheme == theme,
+                                onClick = { selectedTheme = theme },
+                                label = { Text(theme.lowercase().replaceFirstChar { it.uppercase() }) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Select your preferred theme. AMOLED saves battery on OLED screens.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            item {
                 SettingsSection(title = "Sync", icon = Icons.Default.Sync) {
                     val app = context.applicationContext as SoulTrackApp
                     val syncUiState by app.syncManager.uiState.collectAsState()
