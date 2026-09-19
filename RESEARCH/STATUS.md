@@ -18,11 +18,11 @@
 - [x] Pomodoro immersive redesign (gradient ring, ambient background, haptic)
 - [x] Dashboard visual hierarchy (animated score ring)
 - [x] All ArrowBack icons migrated to AutoMirrored
-
-## In Progress
-- [x] Quote deduplication (removed 18 duplicates across 16 categories)
+- [x] Quotes deduplication (removed 18 duplicates across 16 categories)
 - [x] Quote weighted random selection (author diversity algorithm)
 - [x] Timer UI premium glow effects (dual-layer blur, refined spacing)
+
+## In Progress
 - [ ] Micro-interactions and polish
 - [ ] Navigation improvements
 
