@@ -47,9 +47,10 @@ import io.github.dailytrack.data.db.entity.*
         SavedQuoteEntity::class,
         SubtaskEntity::class,
         HabitEntity::class,
-        HabitCompletionEntity::class
+        HabitCompletionEntity::class,
+        GoalEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -70,6 +71,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun savedQuoteDao(): SavedQuoteDao
     abstract fun subtaskDao(): SubtaskDao
     abstract fun habitDao(): HabitDao
+    abstract fun goalDao(): GoalDao
 
     companion object {
         @Volatile
@@ -122,6 +124,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS goals (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
+                        category TEXT NOT NULL DEFAULT 'PRODUCTIVE',
+                        targetType TEXT NOT NULL DEFAULT 'WEEKLY',
+                        targetHours REAL NOT NULL DEFAULT 10.0,
+                        currentHours REAL NOT NULL DEFAULT 0.0,
+                        startDate INTEGER NOT NULL DEFAULT 0,
+                        endDate INTEGER,
+                        isCompleted INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL DEFAULT 0,
+                        isArchived INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -129,7 +152,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "soultrack.db"
                 )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance
