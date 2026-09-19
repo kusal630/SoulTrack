@@ -21,23 +21,37 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.animation.core.*
 import androidx.compose.animation.animateColorAsState
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -49,20 +63,9 @@ import io.github.dailytrack.data.db.entity.TodoEntity
 import io.github.dailytrack.service.PomodoroForegroundService
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
-private val quoteColors = listOf(
-    Color(0xFFE94560),
-    Color(0xFF0F3460),
-    Color(0xFF533483),
-    Color(0xFF2E7D32),
-    Color(0xFFF57C00),
-    Color(0xFF00838F),
-    Color(0xFF6A1B9A),
-    Color(0xFFC62828),
-    Color(0xFF1565C0),
-    Color(0xFF4E342E)
-)
+private val WorkColor = Color(0xFFE94560)
+private val BreakColor = Color(0xFFFFAB40)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +74,7 @@ fun PomodoroScreen(
     viewModel: MainViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val activePomodoro by viewModel.activePomodoro.collectAsState()
     val todayPomodoros by viewModel.todayPomodoros.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -84,69 +88,28 @@ fun PomodoroScreen(
     var selectedTodoId by remember { mutableLongStateOf(0L) }
     var selectedCategoryId by remember { mutableLongStateOf(0L) }
     
-    var flashProgress by remember { mutableFloatStateOf(0f) }
-    var flashColor by remember { mutableStateOf(Color(0xFFE94560)) }
-    
+    var currentQuote by remember { mutableStateOf("Loading inspiring quote...") }
+    var quoteAuthor by remember { mutableStateOf("") }
+
     var showPriorityWarning by remember { mutableStateOf(false) }
     var pendingPomodoroTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var pendingWorkDuration by remember { mutableIntStateOf(25) }
-    
-    var currentQuote by remember { mutableStateOf("Loading inspiring quote...") }
-    var quoteAuthor by remember { mutableStateOf("") }
-    var quoteColor by remember { mutableStateOf(quoteColors[0]) }
-    var quoteIndex by remember { mutableIntStateOf(0) }
 
     val isRunning = activePomodoro != null
     val coroutineScope = rememberCoroutineScope()
 
-    val animatedFlashProgress by animateFloatAsState(
-        targetValue = flashProgress,
-        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
-        label = "flash_progress"
-    )
+    val activeColor = if (isBreak) BreakColor else WorkColor
 
-    val animatedQuoteColor by animateColorAsState(
-        targetValue = quoteColor,
-        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
-        label = "quote_color"
+    val animatedActiveColor by animateColorAsState(
+        targetValue = activeColor,
+        animationSpec = tween(600, easing = FastOutSlowInEasing),
+        label = "active_color"
     )
-
-    val animatedStartButtonColor by animateColorAsState(
-        targetValue = quoteColor,
-        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
-        label = "start_button_color"
-    )
-
-    val screenColor = if (isRunning) {
-        if (isBreak) {
-            val breakColor = Color(0xFFFFAB40)
-            val progress = (elapsedSeconds.toFloat() / ((activePomodoro?.durationMinutes ?: selectedBreakDuration) * 60)).coerceIn(0f, 1f)
-            val fromColor = Color(0xFFE94560)
-            Color(
-                red = fromColor.red + (breakColor.red - fromColor.red) * progress,
-                green = fromColor.green + (breakColor.green - fromColor.green) * progress,
-                blue = fromColor.blue + (breakColor.blue - fromColor.blue) * progress
-            )
-        } else {
-            val workColor = quoteColor
-            val breakColor = Color(0xFFFFAB40)
-            val progress = (elapsedSeconds.toFloat() / ((activePomodoro?.durationMinutes ?: selectedWorkDuration) * 60)).coerceIn(0f, 1f)
-            Color(
-                red = workColor.red + (breakColor.red - workColor.red) * progress,
-                green = workColor.green + (breakColor.green - workColor.green) * progress,
-                blue = workColor.blue + (breakColor.blue - workColor.blue) * progress
-            )
-        }
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
 
     LaunchedEffect(Unit) {
-        val quote = QuotesApi.getRandomQuote()
+        val quote = QuotesApi.getTimedQuote()
         currentQuote = quote.text
         quoteAuthor = quote.author
-        quoteColor = quoteColors[quoteIndex % quoteColors.size]
-        quoteIndex++
     }
 
     LaunchedEffect(activePomodoro) {
@@ -154,27 +117,30 @@ fun PomodoroScreen(
             isBreak = activePomodoro?.type == "BREAK"
             elapsedSeconds = (System.currentTimeMillis() - (activePomodoro?.startTime ?: 0L)) / 1000
             while (true) {
-                delay(1000)
+                delay(100)
                 elapsedSeconds = (System.currentTimeMillis() - (activePomodoro?.startTime ?: 0L)) / 1000
-                
+
                 val totalSeconds = (activePomodoro?.durationMinutes ?: 25) * 60L
                 if (elapsedSeconds >= totalSeconds) {
-                    flashProgress = 1f
-                    flashColor = if (isBreak) Color(0xFFE94560) else Color(0xFFFFAB40)
-                    delay(800)
-                    flashProgress = 0f
-                    
-                    val quote = QuotesApi.getRandomQuote()
+                    try {
+                        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                            manager.defaultVibrator
+                        } else {
+                            @Suppress("DEPRECATION")
+                            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                        }
+                        vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+                    } catch (_: Exception) {}
+
+                    val quote = QuotesApi.getTimedQuote()
                     currentQuote = quote.text
                     quoteAuthor = quote.author
-                    quoteColor = quoteColors[quoteIndex % quoteColors.size]
-                    quoteIndex++
                     elapsedSeconds = 0
                 }
             }
         } else {
             elapsedSeconds = 0
-            flashProgress = 0f
         }
     }
 
@@ -231,7 +197,7 @@ fun PomodoroScreen(
                 title = { Text("Pomodoro Timer") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -243,49 +209,18 @@ fun PomodoroScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            if (flashProgress > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .alpha(animatedFlashProgress)
-                        .background(
-                            Brush.verticalGradient(
-                                0f to flashColor.copy(alpha = 0.8f),
-                                0.5f to flashColor.copy(alpha = 0.4f),
-                                1f to flashColor.copy(alpha = 0.1f)
-                            )
-                        )
-                )
-            }
-
             if (isRunning) {
-                val cardColor = if (isBreak) {
-                    val breakColor = Color(0xFFFFAB40)
-                    val workStart = Color(0xFFE94560)
-                    val p = (elapsedSeconds.toFloat() / ((activePomodoro?.durationMinutes ?: selectedBreakDuration) * 60)).coerceIn(0f, 1f)
-                    Color(
-                        red = workStart.red + (breakColor.red - workStart.red) * p,
-                        green = workStart.green + (breakColor.green - workStart.green) * p,
-                        blue = workStart.blue + (breakColor.blue - workStart.blue) * p
-                    ).copy(alpha = 0.15f)
-                } else {
-                    val workColor = quoteColor
-                    val breakColor = Color(0xFFFFAB40)
-                    val p = (elapsedSeconds.toFloat() / ((activePomodoro?.durationMinutes ?: selectedWorkDuration) * 60)).coerceIn(0f, 1f)
-                    Color(
-                        red = workColor.red + (breakColor.red - workColor.red) * p,
-                        green = workColor.green + (breakColor.green - workColor.green) * p,
-                        blue = workColor.blue + (breakColor.blue - workColor.blue) * p
-                    ).copy(alpha = 0.15f)
-                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            Brush.verticalGradient(
-                                0f to cardColor,
-                                0.5f to cardColor.copy(alpha = 0.08f),
-                                1f to Color.Transparent
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    animatedActiveColor.copy(alpha = 0.12f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.03f),
+                                    MaterialTheme.colorScheme.surface
+                                ),
+                                radius = 900f
                             )
                         )
                 )
@@ -295,55 +230,88 @@ fun PomodoroScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isRunning && !isBreak) screenColor.copy(alpha = 0.2f)
-                            else if (isBreak) screenColor.copy(alpha = 0.2f)
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        )
+                    Spacer(modifier = Modifier.height(if (isRunning) 48.dp else 0.dp))
+                }
+
+                item {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(260.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = if (isBreak) "Break Time" else "Focus Time",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = if (isRunning && !isBreak) screenColor
-                                else if (isBreak) screenColor
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Box(contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(
-                                    progress = { animatedProgress },
-                                    modifier = Modifier.size(180.dp),
-                                    strokeWidth = 12.dp,
-                                    color = screenColor,
-                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                                )
-                                Text(
-                                    text = String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds),
-                                    fontSize = 48.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isRunning && !isBreak) screenColor
-                                    else if (isBreak) screenColor
-                                    else MaterialTheme.colorScheme.onSurface
+                        if (isRunning) {
+                            Canvas(
+                                modifier = Modifier
+                                    .size(260.dp)
+                                    .blur(20.dp)
+                            ) {
+                                drawCircle(
+                                    color = animatedActiveColor.copy(alpha = 0.3f),
+                                    radius = size.minDimension / 2
                                 )
                             }
-                            
-                            Spacer(modifier = Modifier.height(16.dp))
-                            
+                        }
+
+                        Canvas(modifier = Modifier.size(240.dp)) {
+                            val strokeWidth = 10.dp.toPx()
+                            val diameter = size.minDimension - strokeWidth
+                            val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
+                            val arcSize = Size(diameter, diameter)
+
+                            drawArc(
+                                color = Color.Gray.copy(alpha = 0.12f),
+                                startAngle = -90f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            )
+
+                            if (isRunning || progress > 0f) {
+                                drawArc(
+                                    brush = Brush.sweepGradient(
+                                        colors = listOf(
+                                            animatedActiveColor,
+                                            animatedActiveColor.copy(alpha = 0.5f),
+                                            animatedActiveColor
+                                        )
+                                    ),
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * animatedProgress,
+                                    useCenter = false,
+                                    topLeft = topLeft,
+                                    size = arcSize,
+                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                                )
+                            }
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "Focus: $completedPomodorosToday | Break: $completedBreaksToday",
+                                text = if (isRunning) {
+                                    if (isBreak) "Break Time" else "Focus Time"
+                                } else "Ready to Focus",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds),
+                                fontSize = 52.sp,
+                                fontWeight = FontWeight.Thin,
+                                fontFamily = FontFamily.Monospace,
+                                color = if (isRunning) animatedActiveColor
+                                else MaterialTheme.colorScheme.onSurface,
+                                letterSpacing = 2.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "$completedPomodorosToday focus | $completedBreaksToday breaks",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -355,8 +323,9 @@ fun PomodoroScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = animatedQuoteColor.copy(alpha = 0.1f)
-                        )
+                            containerColor = animatedActiveColor.copy(alpha = 0.06f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(
                             modifier = Modifier
@@ -364,13 +333,13 @@ fun PomodoroScreen(
                                 .padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            val isSaved by remember(currentQuote, savedQuotes) {
+                                derivedStateOf { savedQuotes.any { it.text == currentQuote } }
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End
                             ) {
-                                val isSaved by remember(currentQuote, savedQuotes) {
-                                    derivedStateOf { savedQuotes.any { it.text == currentQuote } }
-                                }
                                 IconButton(
                                     onClick = {
                                         if (isSaved) {
@@ -383,30 +352,30 @@ fun PomodoroScreen(
                                 ) {
                                     Icon(
                                         if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = if (isSaved) "Unsave quote" else "Save quote",
-                                        tint = if (isSaved) Color(0xFFE94560) else animatedQuoteColor
+                                        contentDescription = if (isSaved) "Unsave" else "Save",
+                                        tint = if (isSaved) Color(0xFFE94560) else animatedActiveColor
                                     )
                                 }
                             }
                             Text(
-                                text = "\"",
+                                text = "\u201C",
                                 style = MaterialTheme.typography.headlineLarge,
-                                color = animatedQuoteColor,
+                                color = animatedActiveColor.copy(alpha = 0.4f),
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = currentQuote,
                                 style = MaterialTheme.typography.bodyMedium,
                                 textAlign = TextAlign.Center,
-                                color = animatedQuoteColor,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Medium
                             )
                             if (quoteAuthor.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "— $quoteAuthor",
+                                    text = "\u2014 $quoteAuthor",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = animatedQuoteColor.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -416,9 +385,9 @@ fun PomodoroScreen(
                 if (!isRunning) {
                     item {
                         Text(
-                            "Focus Duration (minutes)",
+                            "Focus Duration",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
@@ -438,9 +407,9 @@ fun PomodoroScreen(
 
                     item {
                         Text(
-                            "Break Duration (minutes)",
+                            "Break Duration",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(
@@ -462,7 +431,7 @@ fun PomodoroScreen(
                         Text(
                             "Link to Todo (optional)",
                             style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         var showTodoDropdown by remember { mutableStateOf(false) }
@@ -519,19 +488,13 @@ fun PomodoroScreen(
                                     }
                                 }
 
-                                flashProgress = 1f
-                                flashColor = quoteColor
-                                
-                                coroutineScope.launch {
-                                    delay(800)
-                                    flashProgress = 0f
-                                }
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
                                 val todoTitle = activeTodos.find { it.id == selectedTodoId }?.title ?: ""
                                 val colorInt = android.graphics.Color.rgb(
-                                    (quoteColor.red * 255).toInt(),
-                                    (quoteColor.green * 255).toInt(),
-                                    (quoteColor.blue * 255).toInt()
+                                    (WorkColor.red * 255).toInt(),
+                                    (WorkColor.green * 255).toInt(),
+                                    (WorkColor.blue * 255).toInt()
                                 )
                                 val intent = Intent(context, PomodoroForegroundService::class.java).apply {
                                     putExtra(PomodoroForegroundService.EXTRA_START_TIME, System.currentTimeMillis())
@@ -556,8 +519,9 @@ fun PomodoroScreen(
                                 )
                             },
                             modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = animatedStartButtonColor
+                                containerColor = WorkColor
                             )
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
@@ -724,19 +688,13 @@ fun PomodoroScreen(
             confirmButton = {
                 TextButton(onClick = {
                     val todo = pendingPomodoroTodo ?: return@TextButton
-                    flashProgress = 1f
-                    flashColor = quoteColor
-
-                    coroutineScope.launch {
-                        delay(800)
-                        flashProgress = 0f
-                    }
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
                     val todoTitle = todo.title
                     val colorInt = android.graphics.Color.rgb(
-                        (quoteColor.red * 255).toInt(),
-                        (quoteColor.green * 255).toInt(),
-                        (quoteColor.blue * 255).toInt()
+                        (WorkColor.red * 255).toInt(),
+                        (WorkColor.green * 255).toInt(),
+                        (WorkColor.blue * 255).toInt()
                     )
                     val intent = Intent(context, PomodoroForegroundService::class.java).apply {
                         putExtra(PomodoroForegroundService.EXTRA_START_TIME, System.currentTimeMillis())

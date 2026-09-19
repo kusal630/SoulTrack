@@ -125,7 +125,7 @@ class QuoteWidgetProvider : AppWidgetProvider() {
 
     private fun fetchNewQuote(context: Context) {
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-            val quote = QuotesApi.getRandomQuote()
+            val quote = QuotesApi.getTimedQuote()
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             prefs.edit()
                 .putString("quote_text", quote.text)

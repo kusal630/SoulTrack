@@ -391,10 +391,13 @@ object QuotesApi {
 
     private var onlineQuotes: List<Quote> = emptyList()
     private var prefs: SharedPreferences? = null
+    private val shownQuotes = mutableSetOf<String>()
+    private var quoteQueue = mutableListOf<Quote>()
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         loadOnlineQuotesFromPrefs()
+        loadShownQuotes()
     }
 
     private fun loadOnlineQuotesFromPrefs() {
@@ -408,9 +411,103 @@ object QuotesApi {
         } catch (_: Exception) { }
     }
 
+    private fun loadShownQuotes() {
+        val json = prefs?.getString("shown_quotes", null) ?: return
+        try {
+            val obj = JSONObject(json)
+            val timestamp = obj.optLong("timestamp", 0L)
+            val now = System.currentTimeMillis()
+            if (now - timestamp < 24 * 60 * 60 * 1000L) {
+                val arr = obj.optJSONArray("quotes") ?: return
+                shownQuotes.clear()
+                for (i in 0 until arr.length()) {
+                    shownQuotes.add(arr.getString(i))
+                }
+            } else {
+                shownQuotes.clear()
+                prefs?.edit()?.remove("shown_quotes")?.apply()
+            }
+        } catch (_: Exception) {
+            shownQuotes.clear()
+        }
+    }
+
+    private fun saveShownQuotes() {
+        val arr = JSONArray()
+        shownQuotes.forEach { arr.put(it) }
+        val obj = JSONObject().apply {
+            put("quotes", arr)
+            put("timestamp", System.currentTimeMillis())
+        }
+        prefs?.edit()?.putString("shown_quotes", obj.toString())?.apply()
+    }
+
+    private fun getTimeOfDay(): String {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return when {
+            hour < 12 -> "morning"
+            hour < 17 -> "afternoon"
+            else -> "evening"
+        }
+    }
+
+    private fun refillQueue() {
+        val all = (offlineQuotes + onlineQuotes).filter { it.text !in shownQuotes }
+        quoteQueue.clear()
+        quoteQueue.addAll(all.shuffled())
+        if (quoteQueue.isEmpty()) {
+            shownQuotes.clear()
+            quoteQueue.addAll((offlineQuotes + onlineQuotes).shuffled())
+        }
+    }
+
     suspend fun getRandomQuote(): Quote {
-        val all = offlineQuotes + onlineQuotes
-        return all.random()
+        if (quoteQueue.isEmpty()) refillQueue()
+        val quote = quoteQueue.removeFirstOrNull() ?: offlineQuotes.random()
+        shownQuotes.add(quote.text)
+        if (shownQuotes.size > 100) {
+            val iter = shownQuotes.iterator()
+            repeat(50) { if (iter.hasNext()) iter.next(); iter.remove() }
+        }
+        saveShownQuotes()
+        return quote
+    }
+
+    suspend fun getQuoteByCategory(categoryType: String): Quote {
+        val categoryKeywords = when (categoryType.uppercase()) {
+            "PRODUCTIVE", "LEARNING" -> listOf("focus", "work", "productivity", "discipline", "success", "goal")
+            "EXERCISE" -> listOf("exercise", "health", "body", "strength", "movement", "energy")
+            "WASTED" -> listOf("time", "distraction", "purpose", "discipline", "focus")
+            "SOCIAL" -> listOf("people", "relationship", "connection", "team", "community")
+            else -> emptyList()
+        }
+        if (categoryKeywords.isEmpty()) return getRandomQuote()
+        val all = (offlineQuotes + onlineQuotes).filter { q ->
+            categoryKeywords.any { kw -> q.text.contains(kw, ignoreCase = true) }
+        }
+        val filtered = all.filter { it.text !in shownQuotes }
+        val quote = if (filtered.isNotEmpty()) filtered.random() else all.random()
+        shownQuotes.add(quote.text)
+        saveShownQuotes()
+        return quote
+    }
+
+    suspend fun getTimedQuote(): Quote {
+        val timeOfDay = getTimeOfDay()
+        val timeKeywords = when (timeOfDay) {
+            "morning" -> listOf("morning", "day", "begin", "start", "wake", "dawn")
+            "afternoon" -> listOf("work", "focus", "productivity", "progress", "momentum")
+            "evening" -> listOf("rest", "reflect", "peace", "calm", "gratitude", "sleep")
+            else -> emptyList()
+        }
+        val all = (offlineQuotes + onlineQuotes).filter { q ->
+            timeKeywords.any { kw -> q.text.contains(kw, ignoreCase = true) }
+        }
+        val filtered = all.filter { it.text !in shownQuotes }
+        val quote = if (filtered.isNotEmpty()) filtered.random() else getRandomQuote()
+        shownQuotes.add(quote.text)
+        saveShownQuotes()
+        return quote
     }
 
     fun isApiEnabled(): Boolean {

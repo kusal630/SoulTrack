@@ -14,38 +14,83 @@
  * limitations under the License.
  */
 
-
 package io.github.dailytrack.ui.timer
 
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.service.TimerForegroundService
+import io.github.dailytrack.ui.theme.SoulTrackTheme
 import io.github.dailytrack.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.delay
+import kotlin.math.sin
+
+private val ProductiveColor = Color(0xFF2E7D32)
+private val WastedColor = Color(0xFFC62828)
+private val ExerciseColor = Color(0xFFE65100)
+private val LearningColor = Color(0xFF1565C0)
+private val SocialColor = Color(0xFF6A1B9A)
+private val SleepColor = Color(0xFF311B92)
+private val RecoveryColor = Color(0xFF4CAF50)
+private val NeutralColor = Color(0xFF757575)
+
+private fun getCategoryColor(type: String): Color = when (type) {
+    "PRODUCTIVE" -> ProductiveColor
+    "WASTED" -> WastedColor
+    "EXERCISE" -> ExerciseColor
+    "LEARNING" -> LearningColor
+    "SOCIAL" -> SocialColor
+    "SLEEP" -> SleepColor
+    "RECOVERY" -> RecoveryColor
+    else -> NeutralColor
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,6 +99,7 @@ fun TimerScreen(
     viewModel: MainViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val activeSession by viewModel.activeSession.collectAsState()
     val categories by viewModel.categories.collectAsState()
     var sessionTitle by remember { mutableStateOf("") }
@@ -61,7 +107,6 @@ fun TimerScreen(
     var showCategoryError by remember { mutableStateOf(false) }
     var showTitleError by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
-    var categorySearchQuery by remember { mutableStateOf("") }
 
     val isRunning = activeSession != null
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
@@ -70,20 +115,9 @@ fun TimerScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            val catName = categories[selectedCategoryId]?.name ?: ""
-            val catType = categories[selectedCategoryId]?.type ?: ""
-            viewModel.startSession(sessionTitle, selectedCategoryId)
-            val intent = Intent(context, TimerForegroundService::class.java).apply {
-                putExtra(TimerForegroundService.EXTRA_START_TIME, System.currentTimeMillis())
-                putExtra(TimerForegroundService.EXTRA_TITLE, sessionTitle.ifBlank { catName })
-                putExtra(TimerForegroundService.EXTRA_CATEGORY, catName)
-                putExtra(TimerForegroundService.EXTRA_CATEGORY_TYPE, catType)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            startTimerService(
+                context, viewModel, sessionTitle, selectedCategoryId, categories
+            )
         }
     }
 
@@ -91,7 +125,7 @@ fun TimerScreen(
         if (activeSession != null) {
             while (true) {
                 elapsedSeconds = (System.currentTimeMillis() - (activeSession?.startTime ?: 0L)) / 1000
-                kotlinx.coroutines.delay(1000)
+                delay(100)
             }
         } else {
             elapsedSeconds = 0
@@ -103,16 +137,39 @@ fun TimerScreen(
     val seconds = elapsedSeconds % 60
 
     val selectedCategory = categories[selectedCategoryId]
-    val isNoCategory = selectedCategoryId == 0L
-    val isWastedCategory = selectedCategory?.type == "WASTED"
-    val isProductiveCategory = selectedCategory?.type in listOf("PRODUCTIVE", "LEARNING", "EXERCISE")
+    val categoryType = selectedCategory?.type ?: ""
+    val categoryColor = if (selectedCategoryId > 0L) getCategoryColor(categoryType) else MaterialTheme.colorScheme.primary
 
-    val categoryBorderColor = when {
-        selectedCategoryId == 0L -> MaterialTheme.colorScheme.outline
-        isWastedCategory -> Color(0xFFC62828)
-        isProductiveCategory -> Color(0xFF2E7D32)
-        else -> MaterialTheme.colorScheme.outline
-    }
+    val animatedCategoryColor by animateColorAsState(
+        targetValue = categoryColor,
+        animationSpec = tween(600, easing = FastOutSlowInEasing),
+        label = "category_color"
+    )
+
+    val glowAlpha = if (isRunning) {
+        val infiniteTransition = rememberInfiniteTransition(label = "glow")
+        val pulse by infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 0.7f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "glow_pulse"
+        )
+        pulse
+    } else 0f
+
+    val ringProgress = if (isRunning) {
+        val totalSeconds = 8 * 3600L
+        (elapsedSeconds.toFloat() / totalSeconds).coerceIn(0f, 1f)
+    } else 0f
+
+    val animatedRingProgress by animateFloatAsState(
+        targetValue = ringProgress,
+        animationSpec = tween(300, easing = LinearEasing),
+        label = "ring_progress"
+    )
 
     Scaffold(
         topBar = {
@@ -120,257 +177,231 @@ fun TimerScreen(
                 title = { Text("Timer") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
+                )
             )
         }
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = when {
-                            isRunning && isWastedCategory -> Color(0xFF3D1F1F)
-                            isRunning && isProductiveCategory -> Color(0xFF1A3D1A)
-                            isRunning -> MaterialTheme.colorScheme.primaryContainer
-                            else -> MaterialTheme.colorScheme.surfaceVariant
-                        }
+                .background(
+                    Brush.radialGradient(
+                        colors = if (isRunning) {
+                            listOf(
+                                animatedCategoryColor.copy(alpha = 0.15f),
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.05f),
+                                MaterialTheme.colorScheme.surface
+                            )
+                        } else {
+                            listOf(
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                MaterialTheme.colorScheme.surface
+                            )
+                        },
+                        radius = 800f
                     )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(280.dp)
                 ) {
+                    if (isRunning) {
+                        Canvas(
+                            modifier = Modifier
+                                .size(280.dp)
+                                .blur(16.dp)
+                        ) {
+                            drawCircle(
+                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.4f),
+                                radius = size.minDimension / 2
+                            )
+                        }
+                    }
+
+                    Canvas(modifier = Modifier.size(260.dp)) {
+                        val strokeWidth = 10.dp.toPx()
+                        val diameter = size.minDimension - strokeWidth
+                        val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
+                        val arcSize = Size(diameter, diameter)
+
+                        drawArc(
+                            color = Color.Gray.copy(alpha = 0.15f),
+                            startAngle = -90f,
+                            sweepAngle = 360f,
+                            useCenter = false,
+                            topLeft = topLeft,
+                            size = arcSize,
+                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                        )
+
+                        if (isRunning) {
+                            drawArc(
+                                brush = Brush.sweepGradient(
+                                    colors = listOf(
+                                        animatedCategoryColor,
+                                        animatedCategoryColor.copy(alpha = 0.6f),
+                                        animatedCategoryColor
+                                    )
+                                ),
+                                startAngle = -90f,
+                                sweepAngle = 360f * animatedRingProgress,
+                                useCenter = false,
+                                topLeft = topLeft,
+                                size = arcSize,
+                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            )
+                        }
+                    }
+
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = String.format(java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds),
-                            fontSize = 56.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = when {
-                                isRunning && isWastedCategory -> Color(0xFFFF6B6B)
-                                isRunning && isProductiveCategory -> Color(0xFF69F0AE)
-                                else -> MaterialTheme.colorScheme.onPrimaryContainer
-                            }
+                            text = String.format(
+                                java.util.Locale.US,
+                                "%02d:%02d:%02d",
+                                hours, minutes, seconds
+                            ),
+                            fontSize = 52.sp,
+                            fontWeight = FontWeight.Thin,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isRunning) animatedCategoryColor
+                            else MaterialTheme.colorScheme.onSurface,
+                            letterSpacing = 2.sp
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = if (isRunning) {
-                                activeSession?.title?.ifBlank { 
-                                    categories[activeSession?.categoryId]?.name ?: "Active Session" 
-                                } ?: "Active Session"
-                            } else "Ready to start",
+                                activeSession?.title?.ifBlank {
+                                    categories[activeSession?.categoryId]?.name ?: "Tracking"
+                                } ?: "Tracking"
+                            } else "Ready to focus",
                             style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
                         )
                         if (isRunning) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Started at ${java.time.Instant.ofEpochMilli(activeSession?.startTime ?: 0L)
-                                    .atZone(java.time.ZoneId.systemDefault())
-                                    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))}",
+                                text = selectedCategory?.name ?: "",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                color = animatedCategoryColor.copy(alpha = 0.7f)
                             )
                         }
                     }
                 }
-            }
 
-            item {
-                Text(
-                    text = "Category *",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = if (showCategoryError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(
-                            if (selectedCategoryId != 0L) {
-                                Modifier.border(
-                                    width = 2.dp,
-                                    color = categoryBorderColor,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                            } else Modifier
-                        ),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                Spacer(modifier = Modifier.height(32.dp))
+
+                if (!isRunning) {
+                    Text(
+                        text = "Choose Category",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (showCategoryError) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth()
                     )
-                ) {
-                    Column(modifier = Modifier.padding(8.dp)) {
-                        OutlinedTextField(
-                            value = categorySearchQuery,
-                            onValueChange = { categorySearchQuery = it },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            placeholder = { Text("Search categories...") },
-                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                            singleLine = true
-                        )
-                        categories.values
-                            .filter { !it.archived }
-                            .filter { categorySearchQuery.isBlank() || it.name.contains(categorySearchQuery, ignoreCase = true) }
-                            .sortedBy { it.name }
-                            .forEach { category ->
-                                val isSelected = selectedCategoryId == category.id
-                                val categoryColor = when (category.type) {
-                                    "WASTED" -> Color(0xFFC62828)
-                                    "PRODUCTIVE" -> Color(0xFF2E7D32)
-                                    "LEARNING" -> Color(0xFF1565C0)
-                                    "EXERCISE" -> Color(0xFFE65100)
-                                    "SOCIAL" -> Color(0xFF6A1B9A)
-                                    "SLEEP" -> Color(0xFF311B92)
-                                    "RECOVERY" -> Color(0xFF4CAF50)
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                                
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            selectedCategoryId = category.id
-                                            showCategoryError = false
-                                        }
-                                        .then(
-                                            if (isSelected) {
-                                                Modifier.border(
-                                                    width = 2.dp,
-                                                    color = categoryColor,
-                                                    shape = RoundedCornerShape(8.dp)
-                                                )
-                                            } else Modifier
-                                        )
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(12.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .then(
-                                                Modifier.border(
-                                                    width = 2.dp,
-                                                    color = categoryColor,
-                                                    shape = RoundedCornerShape(6.dp)
-                                                )
-                                            )
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val quickCategories = categories.values
+                        .filter { !it.archived }
+                        .sortedBy { it.name }
+                        .take(8)
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(quickCategories) { category ->
+                            val isSelected = selectedCategoryId == category.id
+                            val chipColor = getCategoryColor(category.type)
+
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    selectedCategoryId = category.id
+                                    showCategoryError = false
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                },
+                                label = {
                                     Text(
-                                        text = category.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (isSelected) categoryColor else MaterialTheme.colorScheme.onSurface
+                                        category.name,
+                                        maxLines = 1
                                     )
-                                    if (isSelected) {
-                                        Spacer(modifier = Modifier.weight(1f))
+                                },
+                                leadingIcon = if (isSelected) {
+                                    {
                                         Icon(
                                             Icons.Default.Check,
-                                            contentDescription = "Selected",
-                                            tint = categoryColor,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (categorySearchQuery.isNotBlank()) {
-                                val customName = categorySearchQuery.trim()
-                                val existsAlready = categories.values.any {
-                                    it.name.equals(customName, ignoreCase = true)
-                                }
-                                if (!existsAlready) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                viewModel.addCustomCategory(customName) { newId ->
-                                                    selectedCategoryId = newId
-                                                    categorySearchQuery = ""
-                                                }
-                                            }
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Add,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = "Add \"$customName\" as new category",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.primary
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
-                                }
-                            }
+                                } else null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = chipColor.copy(alpha = 0.2f),
+                                    selectedLabelColor = chipColor,
+                                    selectedLeadingIconColor = chipColor
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = chipColor.copy(alpha = 0.3f),
+                                    selectedBorderColor = chipColor,
+                                    enabled = true,
+                                    selected = isSelected
+                                )
+                            )
+                        }
                     }
-                }
-                
-                if (showCategoryError) {
-                    Text(
-                        text = "Please select a category",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 4.dp)
+
+                    if (quickCategories.isEmpty()) {
+                        Text(
+                            text = "No categories yet. Create one in Settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = sessionTitle,
+                        onValueChange = {
+                            sessionTitle = it
+                            showTitleError = false
+                        },
+                        label = {
+                            Text("Session name (optional)")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
                     )
-                }
-            }
 
-            item {
-                OutlinedTextField(
-                    value = sessionTitle,
-                    onValueChange = { 
-                        sessionTitle = it
-                        showTitleError = false
-                    },
-                    label = { 
-                        Text(if (isNoCategory) "Session name * (required for No category)" else "Session name (optional)") 
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    enabled = !isRunning,
-                    isError = showTitleError,
-                    supportingText = if (showTitleError) {
-                        { Text("Please enter a session name") }
-                    } else null
-                )
-            }
+                    Spacer(modifier = Modifier.height(24.dp))
 
-            item {
-                Button(
-                    onClick = {
-                        if (isRunning) {
-                            viewModel.stopSession()
-                            context.stopService(Intent(context, TimerForegroundService::class.java))
-                            sessionTitle = ""
-                            selectedCategoryId = 0L
-                        } else {
+                    Button(
+                        onClick = {
                             if (selectedCategoryId == 0L) {
                                 showCategoryError = true
-                                return@Button
-                            }
-                            
-                            if (isNoCategory && sessionTitle.isBlank()) {
-                                showTitleError = true
                                 return@Button
                             }
 
@@ -379,94 +410,100 @@ fun TimerScreen(
                                     context,
                                     Manifest.permission.POST_NOTIFICATIONS
                                 ) == PackageManager.PERMISSION_GRANTED
-                                
+
                                 if (!hasPermission) {
                                     showPermissionDialog = true
                                     return@Button
                                 }
                             }
 
-                            val catName = categories[selectedCategoryId]?.name ?: ""
-                            val catType = categories[selectedCategoryId]?.type ?: ""
-                            viewModel.startSession(sessionTitle, selectedCategoryId)
-                            val intent = Intent(context, TimerForegroundService::class.java).apply {
-                                putExtra(TimerForegroundService.EXTRA_START_TIME, System.currentTimeMillis())
-                                putExtra(TimerForegroundService.EXTRA_TITLE, sessionTitle.ifBlank { catName })
-                                putExtra(TimerForegroundService.EXTRA_CATEGORY, catName)
-                                putExtra(TimerForegroundService.EXTRA_CATEGORY_TYPE, catType)
-                            }
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                context.startForegroundService(intent)
-                            } else {
-                                context.startService(intent)
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isRunning)
-                            MaterialTheme.colorScheme.error
-                        else
-                            MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(
-                        if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isRunning) "Stop" else "Start Timer", fontSize = 16.sp)
-                }
-            }
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            startTimerService(
+                                context, viewModel, sessionTitle, selectedCategoryId, categories
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Start Tracking",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.stopSession()
+                            context.stopService(
+                                Intent(context, TimerForegroundService::class.java)
+                            )
+                            sessionTitle = ""
+                            selectedCategoryId = 0L
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.Stop,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Stop",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
 
-            if (isRunning) {
-                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer
-                        )
+                            containerColor = animatedCategoryColor.copy(alpha = 0.08f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Active Session Details",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Duration", style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    String.format(java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds),
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            DetailRow("Duration", String.format(
+                                java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds
+                            ))
                             if ((activeSession?.title ?: "").isNotBlank()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Title", style = MaterialTheme.typography.bodyMedium)
-                                    Text(activeSession?.title ?: "", fontWeight = FontWeight.Bold)
-                                }
+                                DetailRow("Title", activeSession?.title ?: "")
                             }
-                            val activeCategoryName = activeSession?.categoryId?.let { categories[it]?.name } ?: ""
-                            if (activeCategoryName.isNotBlank()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Category", style = MaterialTheme.typography.bodyMedium)
-                                    Text(activeCategoryName, fontWeight = FontWeight.Bold)
-                                }
+                            val catName = activeSession?.categoryId?.let { categories[it]?.name } ?: ""
+                            if (catName.isNotBlank()) {
+                                DetailRow("Category", catName)
                             }
+                            DetailRow("Started", java.time.Instant.ofEpochMilli(activeSession?.startTime ?: 0L)
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
@@ -475,7 +512,7 @@ fun TimerScreen(
         AlertDialog(
             onDismissRequest = { showPermissionDialog = false },
             title = { Text("Notification Permission") },
-            text = { Text("Soul Track needs notification permission to show the running timer. Please allow notifications.") },
+            text = { Text("Soul Track needs notification permission to show the running timer.") },
             confirmButton = {
                 TextButton(onClick = {
                     showPermissionDialog = false
@@ -490,5 +527,49 @@ fun TimerScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+private fun startTimerService(
+    context: android.content.Context,
+    viewModel: MainViewModel,
+    sessionTitle: String,
+    selectedCategoryId: Long,
+    categories: Map<Long, io.github.dailytrack.data.db.entity.CategoryEntity>
+) {
+    val catName = categories[selectedCategoryId]?.name ?: ""
+    val catType = categories[selectedCategoryId]?.type ?: ""
+    viewModel.startSession(sessionTitle, selectedCategoryId)
+    val intent = Intent(context, TimerForegroundService::class.java).apply {
+        putExtra(TimerForegroundService.EXTRA_START_TIME, System.currentTimeMillis())
+        putExtra(TimerForegroundService.EXTRA_TITLE, sessionTitle.ifBlank { catName })
+        putExtra(TimerForegroundService.EXTRA_CATEGORY, catName)
+        putExtra(TimerForegroundService.EXTRA_CATEGORY_TYPE, catType)
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.startForegroundService(intent)
+    } else {
+        context.startService(intent)
     }
 }
