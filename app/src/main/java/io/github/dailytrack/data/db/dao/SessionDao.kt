@@ -23,10 +23,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SessionDao {
-    @Query("SELECT * FROM sessions WHERE startTime >= :dayStart AND startTime < :dayEnd ORDER BY startTime")
+    @Query("SELECT * FROM sessions WHERE startTime < :dayEnd AND (endTime IS NULL OR endTime > :dayStart) ORDER BY startTime")
     fun getSessionsForDay(dayStart: Long, dayEnd: Long): Flow<List<SessionEntity>>
 
-    @Query("SELECT * FROM sessions WHERE startTime >= :dayStart AND startTime < :dayEnd ORDER BY startTime")
+    @Query("SELECT * FROM sessions WHERE startTime < :dayEnd AND (endTime IS NULL OR endTime > :dayStart) ORDER BY startTime")
     suspend fun getSessionsForDaySync(dayStart: Long, dayEnd: Long): List<SessionEntity>
 
     @Query("SELECT * FROM sessions ORDER BY startTime DESC")

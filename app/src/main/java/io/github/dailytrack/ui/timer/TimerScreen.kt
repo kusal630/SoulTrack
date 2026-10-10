@@ -68,6 +68,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.service.TimerForegroundService
 import io.github.dailytrack.ui.theme.*
+import io.github.dailytrack.ui.navigateToHome
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import kotlin.math.sin
@@ -113,10 +114,12 @@ fun TimerScreen(
     }
 
     LaunchedEffect(activeSession) {
-        if (activeSession != null) {
-            while (true) {
-                elapsedSeconds = (System.currentTimeMillis() - (activeSession?.startTime ?: 0L)) / 1000
-                delay(100)
+        val session = activeSession
+        if (session != null) {
+            while (activeSession === session) {
+                elapsedSeconds = ((System.currentTimeMillis() - session.startTime) / 1000)
+                    .coerceAtLeast(0L)
+                delay(1000)
             }
         } else {
             elapsedSeconds = 0
@@ -167,7 +170,7 @@ fun TimerScreen(
             TopAppBar(
                 title = { Text("Timer") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.navigateToHome() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },

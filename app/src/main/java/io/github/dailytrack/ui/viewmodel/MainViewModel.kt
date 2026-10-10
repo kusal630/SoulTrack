@@ -18,17 +18,24 @@
 package io.github.dailytrack.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.dailytrack.SoulTrackApp
 import io.github.dailytrack.data.db.entity.*
 import io.github.dailytrack.data.repository.*
 import io.github.dailytrack.engine.*
+import io.github.dailytrack.service.PomodoroForegroundService
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val db = (application as SoulTrackApp).database
     private val sessionRepo = SessionRepository(db.sessionDao())
@@ -37,6 +44,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val todoRepo = TodoRepository(db.todoDao(), db.subtaskDao())
     private val pomodoroRepo = PomodoroRepository(db.pomodoroSessionDao())
     private val savedQuoteRepo = SavedQuoteRepository(db.savedQuoteDao())
+    private val habitRepo = HabitRepository(db.habitDao())
     private val routineEngine = RoutineLoopEngine()
 
     private val timeEngine = TimeCoverageEngine()
@@ -45,6 +53,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate
+
+    private val _refreshTick = MutableStateFlow(0)
+    private var followsToday = true
 
     private val _activeSession = MutableStateFlow<SessionEntity?>(null)
     val activeSession: StateFlow<SessionEntity?> = _activeSession
@@ -97,6 +108,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _savedQuotes = MutableStateFlow<List<SavedQuoteEntity>>(emptyList())
     val savedQuotes: StateFlow<List<SavedQuoteEntity>> = _savedQuotes
 
+    private val _habits = MutableStateFlow<List<HabitEntity>>(emptyList())
+    val habits: StateFlow<List<HabitEntity>> = _habits
+
+    private val _habitCompletions = MutableStateFlow<Map<Long, List<LocalDate>>>(emptyMap())
+    val habitCompletions: StateFlow<Map<Long, List<LocalDate>>> = _habitCompletions
+
     private val _weeklyStats = MutableStateFlow(WeeklyStats())
     val weeklyStats: StateFlow<WeeklyStats> = _weeklyStats
 
@@ -139,30 +156,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            todoRepo.getOverdueCount(System.currentTimeMillis()).collect { count ->
-                _overdueCount.value = count
-            }
-        }
-
-        viewModelScope.launch {
-            _selectedDate.collect { date ->
-                loadDayData(date)
-                val zone = ZoneId.systemDefault()
-                val (dayStart, dayEnd) = getDayRange(date, zone)
-                todoRepo.getTodayActiveTodoCount(dayStart, dayEnd).collect { count ->
-                    _activeTodoCount.value = count
+            combine(_selectedDate, _refreshTick) { date, _ -> date }
+                .flatMapLatest { date ->
+                    val zone = ZoneId.systemDefault()
+                    val (dayStart, dayEnd) = getDayRange(date, zone)
+                    combine(
+                        sessionRepo.getSessionsForDay(dayStart, dayEnd),
+                        pomodoroRepo.getPomodorosForDay(dayStart, dayEnd),
+                        todoRepo.getTodayActiveTodoCount(dayStart, dayEnd),
+                        todoRepo.getTodayCompletedTodoCount(dayStart, dayEnd),
+                        _categories
+                    ) { sessions, pomodoros, activeCount, completedCount, cats ->
+                        DaySnapshot(date, zone, sessions, pomodoros, activeCount, completedCount, cats)
+                    }
                 }
-            }
-        }
-
-        viewModelScope.launch {
-            _selectedDate.collect { date ->
-                val zone = ZoneId.systemDefault()
-                val (dayStart, dayEnd) = getDayRange(date, zone)
-                todoRepo.getTodayCompletedTodoCount(dayStart, dayEnd).collect { count ->
-                    _completedTodoCount.value = count
+                .collect { snapshot ->
+                    _todaySessions.value = snapshot.sessions
+                    _todayPomodoros.value = snapshot.pomodoros
+                    _activeTodoCount.value = snapshot.activeCount
+                    _completedTodoCount.value = snapshot.completedCount
+                    _todayCoverage.value = timeEngine.calculateCoverage(
+                        snapshot.sessions, snapshot.categories, snapshot.date, snapshot.zone
+                    )
+                    calculateGrowthScore()
+                    detectLoop()
+                    generateInsights()
+                    calculateDailyProductivity()
+                    calculateWeeklyStats()
                 }
-            }
         }
 
         viewModelScope.launch {
@@ -170,35 +191,88 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _savedQuotes.value = quotes
             }
         }
-    }
-
-    private fun loadDayData(date: LocalDate) {
-        val zone = ZoneId.systemDefault()
-        val (dayStart, dayEnd) = getDayRange(date, zone)
 
         viewModelScope.launch {
-            sessionRepo.getSessionsForDay(dayStart, dayEnd).collect { sessions ->
-                _todaySessions.value = sessions
-                _todayCoverage.value = timeEngine.calculateCoverage(sessions, _categories.value, date, zone)
-                calculateGrowthScore()
-                detectLoop()
-                generateInsights()
-                calculateDailyProductivity()
+            habitRepo.getAllHabits().collect { habits ->
+                _habits.value = habits.filter { !it.isArchived }
             }
         }
 
         viewModelScope.launch {
-            pomodoroRepo.getPomodorosForDay(dayStart, dayEnd).collect { pomodoros ->
-                _todayPomodoros.value = pomodoros
+            val today = LocalDate.now()
+            habitRepo.getAllCompletionsForDateRange(today.minusDays(364), today).collect { entries ->
+                _habitCompletions.value = entries.groupBy(
+                    keySelector = { it.habitId },
+                    valueTransform = {
+                        Instant.ofEpochMilli(it.completedDate)
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDate()
+                    }
+                )
             }
         }
 
         viewModelScope.launch {
-            calculateWeeklyStats()
+            pomodoroRepo.getActivePomodoro().collect { pomodoro ->
+                _activePomodoro.value = pomodoro
+            }
+        }
+
+        viewModelScope.launch {
+            tick()
+            while (true) {
+                kotlinx.coroutines.delay(30_000L)
+                tick()
+            }
         }
     }
+
+    private suspend fun tick() {
+        val today = LocalDate.now()
+        if (followsToday && _selectedDate.value != today) {
+            _selectedDate.value = today
+        }
+
+        val now = System.currentTimeMillis()
+        if (_activeSession.value != null || _todaySessions.value.any { it.isActive }) {
+            _todayCoverage.value = timeEngine.calculateCoverage(
+                _todaySessions.value, _categories.value, _selectedDate.value, ZoneId.systemDefault(), now = now
+            )
+        }
+
+        val overdueCount = todoRepo.getOverdueCount(now).first()
+        _overdueCount.value = overdueCount
+
+        reconcileStalePomodoro(now)
+    }
+
+    private suspend fun reconcileStalePomodoro(now: Long) {
+        runCatching {
+            val active = pomodoroRepo.getActivePomodoroSync() ?: return
+            val plannedEnd = active.startTime + active.durationMinutes * 60_000L
+            val prefs = getApplication<Application>()
+                .getSharedPreferences("pom_widget_prefs", Context.MODE_PRIVATE)
+            val serviceRunning = prefs.getBoolean("is_running", false)
+            val staleByTime = now > plannedEnd + 30_000L
+            val staleByService = !serviceRunning && now > active.startTime + 60_000L
+            if (staleByTime || staleByService) {
+                pomodoroRepo.completePomodoro(active.id, minOf(now, plannedEnd))
+            }
+        }
+    }
+
+    private data class DaySnapshot(
+        val date: LocalDate,
+        val zone: ZoneId,
+        val sessions: List<SessionEntity>,
+        val pomodoros: List<PomodoroSessionEntity>,
+        val activeCount: Int,
+        val completedCount: Int,
+        val categories: Map<Long, CategoryEntity>
+    )
 
     fun selectDate(date: LocalDate) {
+        followsToday = date == LocalDate.now()
         _selectedDate.value = date
     }
 
@@ -239,7 +313,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun reloadAll() {
-        loadDayData(_selectedDate.value)
+        _refreshTick.value = _refreshTick.value + 1
     }
 
     fun addCustomCategory(name: String, onCreated: (Long) -> Unit) {
@@ -305,48 +379,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startPomodoro(todoId: Long?, categoryId: Long?, durationMinutes: Int) {
-        viewModelScope.launch {
-            val pomodoro = PomodoroSessionEntity(
-                todoId = todoId,
-                categoryId = categoryId,
-                startTime = System.currentTimeMillis(),
-                durationMinutes = durationMinutes,
-                type = "WORK"
-            )
-            val id = pomodoroRepo.insert(pomodoro)
-            _activePomodoro.value = pomodoroRepo.getPomodoroById(id)
+    fun startPomodoro(
+        todoId: Long?,
+        categoryId: Long?,
+        durationMinutes: Int,
+        title: String = "",
+        breakDurationMinutes: Int = 5
+    ) {
+        val app = getApplication<Application>()
+        val intent = Intent(app, PomodoroForegroundService::class.java).apply {
+            putExtra(PomodoroForegroundService.EXTRA_START_TIME, System.currentTimeMillis())
+            putExtra(PomodoroForegroundService.EXTRA_WORK_DURATION, durationMinutes)
+            putExtra(PomodoroForegroundService.EXTRA_BREAK_DURATION, breakDurationMinutes)
+            putExtra(PomodoroForegroundService.EXTRA_LONG_BREAK_DURATION, 15)
+            putExtra(PomodoroForegroundService.EXTRA_TODO_TITLE, title)
+            putExtra(PomodoroForegroundService.EXTRA_TODO_ID, todoId ?: -1L)
+            putExtra(PomodoroForegroundService.EXTRA_CATEGORY_ID, categoryId ?: -1L)
+            putExtra(PomodoroForegroundService.EXTRA_IS_BREAK, false)
+            putExtra(PomodoroForegroundService.EXTRA_IS_LONG_BREAK, false)
+            putExtra(PomodoroForegroundService.EXTRA_SESSION_NUMBER, 0)
         }
-    }
-
-    fun completePomodoro() {
-        viewModelScope.launch {
-            val pomodoro = _activePomodoro.value ?: return@launch
-            pomodoroRepo.completePomodoro(pomodoro.id, System.currentTimeMillis())
-            _activePomodoro.value = null
-
-            if (pomodoro.todoId != null) {
-                val todo = todoRepo.getTodoById(pomodoro.todoId)
-                if (todo != null) {
-                    todoRepo.update(todo.copy(
-                        actualMinutes = todo.actualMinutes + pomodoro.durationMinutes,
-                        pomodoroCount = todo.pomodoroCount + 1,
-                        updatedAt = System.currentTimeMillis()
-                    ))
-                }
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                app.startForegroundService(intent)
+            } else {
+                app.startService(intent)
             }
         }
     }
 
-    fun startPomodoroBreak(durationMinutes: Int) {
-        viewModelScope.launch {
-            val pomodoro = PomodoroSessionEntity(
-                startTime = System.currentTimeMillis(),
-                durationMinutes = durationMinutes,
-                type = "BREAK"
-            )
-            pomodoroRepo.insert(pomodoro)
+    fun stopPomodoro() {
+        val app = getApplication<Application>()
+        val intent = Intent(app, PomodoroForegroundService::class.java).apply {
+            action = PomodoroForegroundService.ACTION_STOP
         }
+        runCatching { app.startService(intent) }
+    }
+
+    fun addHabit(name: String, icon: String, color: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            habitRepo.insertHabit(
+                HabitEntity(
+                    name = name.trim(),
+                    icon = icon.ifBlank { "⭐" },
+                    color = color.ifBlank { "#10B981" }
+                )
+            )
+        }
+    }
+
+    fun toggleHabit(habitId: Long) {
+        viewModelScope.launch {
+            val completedToday = _habitCompletions.value[habitId]?.contains(LocalDate.now()) == true
+            if (completedToday) habitRepo.uncompleteHabit(habitId)
+            else habitRepo.completeHabit(habitId)
+        }
+    }
+
+    fun deleteHabit(habit: HabitEntity) {
+        viewModelScope.launch { habitRepo.deleteHabit(habit) }
     }
 
     fun saveQuote(text: String, author: String) {
@@ -400,10 +492,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val zone = ZoneId.systemDefault()
         val today = _selectedDate.value
         val (dayStart, dayEnd) = getDayRange(today, zone)
+        val now = System.currentTimeMillis()
 
         val sessions = sessionRepo.getSessionsForDaySync(dayStart, dayEnd)
         val cats = _categories.value
-        val pomodoros = pomodoroRepo.getPomodorosForDaySync(dayStart, dayEnd)
 
         var learningMinutes = 0.0
         var productiveMinutes = 0.0
@@ -412,37 +504,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         var sleepHours = 0.0
 
         for (session in sessions) {
-            if (session.isActive) continue
-            val duration = ((session.endTime ?: dayEnd) - session.startTime) / 60000.0
+            val duration = sessionMinutesWithinDay(session, dayStart, dayEnd, now)
+            if (duration <= 0.0) continue
             val cat = session.categoryId?.let { cats[it] }
             val catType = cat?.type ?: session.type
 
             when (catType) {
                 "LEARNING" -> learningMinutes += duration
-                "PRODUCTIVE" -> productiveMinutes += duration
-                "ACTIVITY" -> productiveMinutes += duration
+                "PRODUCTIVE", "ACTIVITY" -> productiveMinutes += duration
                 "EXERCISE" -> exerciseMinutes += duration
                 "SOCIAL" -> socialMinutes += duration
                 "SLEEP" -> sleepHours += duration / 60.0
             }
         }
 
-        for (pomodoro in pomodoros) {
-            if (pomodoro.type == "WORK" && pomodoro.isCompleted) {
-                productiveMinutes += pomodoro.durationMinutes
-            }
-        }
-
-        val todoMinutes = todoRepo.getTotalCompletedMinutesInRange(dayStart, dayEnd)
-        productiveMinutes += todoMinutes
-
         var consecutiveDaysActive = 0
         for (i in 0..6) {
             val date = today.minusDays(i.toLong())
             val (dStart, dEnd) = getDayRange(date, zone)
-            val daySessions = sessionRepo.getSessionsForDaySync(dStart, dEnd).filter { !it.isActive }
-            val dayPomodoros = pomodoroRepo.getPomodorosForDaySync(dStart, dEnd).filter { it.isCompleted }
-            if (daySessions.isNotEmpty() || dayPomodoros.isNotEmpty()) {
+            if (hasTrackedTime(dStart, dEnd, now)) {
                 consecutiveDaysActive++
             } else {
                 break
@@ -471,37 +551,82 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _growthResult.value = result
     }
 
+    private suspend fun hasTrackedTime(dayStart: Long, dayEnd: Long, now: Long): Boolean {
+        val sessions = sessionRepo.getSessionsForDaySync(dayStart, dayEnd)
+        val sessionTracked = sessions.any { session ->
+            val start = maxOf(session.startTime, dayStart)
+            sessionEndWithinDay(session, dayEnd, now) > start
+        }
+        if (sessionTracked) return true
+        return pomodoroRepo.getPomodorosForDaySync(dayStart, dayEnd).any { it.isCompleted }
+    }
+
+    private fun sessionEndWithinDay(session: SessionEntity, dayEnd: Long, now: Long): Long = when {
+        session.isActive -> minOf(now, dayEnd)
+        session.endTime != null -> minOf(session.endTime, dayEnd)
+        else -> dayEnd
+    }
+
+    private fun sessionMinutesWithinDay(
+        session: SessionEntity,
+        dayStart: Long,
+        dayEnd: Long,
+        now: Long
+    ): Double {
+        val start = maxOf(session.startTime, dayStart)
+        val end = sessionEndWithinDay(session, dayEnd, now)
+        return ((end - start).coerceAtLeast(0L)) / 60000.0
+    }
+
+    private fun sessionMinutesWithinPomodoro(pomodoro: PomodoroSessionEntity): Double {
+        val end = pomodoro.endTime ?: (pomodoro.startTime + pomodoro.durationMinutes * 60_000L)
+        return ((end - pomodoro.startTime).coerceAtLeast(0L)) / 60000.0
+    }
+
     private suspend fun detectLoop() {
         val zone = ZoneId.systemDefault()
         val today = _selectedDate.value
+        val now = System.currentTimeMillis()
 
         val dailyVectors = mutableListOf<Map<String, Double>>()
         val growthScores = mutableListOf<Double>()
         val noveltyScores = mutableListOf<Double>()
         val recentCategorySets = mutableListOf<Set<Long>>()
+        var runningStreak = 0
 
         for (i in 6 downTo 0) {
             val date = today.minusDays(i.toLong())
             val (dayStart, dayEnd) = getDayRange(date, zone)
             val sessions = sessionRepo.getSessionsForDaySync(dayStart, dayEnd)
-            val pomodoros = pomodoroRepo.getPomodorosForDaySync(dayStart, dayEnd)
 
             val categoryDurations = mutableMapOf<Long, Long>()
             val dayCategories = mutableSetOf<Long>()
-            for (session in sessions) {
-                val catId = session.categoryId ?: continue
-                val duration = (session.endTime ?: dayEnd) - session.startTime
-                categoryDurations[catId] = (categoryDurations[catId] ?: 0L) + duration
-                dayCategories.add(catId)
-            }
+            var learningMinutes = 0.0
+            var productiveMinutes = 0.0
+            var exerciseMinutes = 0.0
+            var socialMinutes = 0.0
+            var sleepHours = 0.0
 
-            for (pomodoro in pomodoros) {
-                if (pomodoro.isCompleted && pomodoro.categoryId != null) {
-                    val duration = pomodoro.durationMinutes * 60000L
-                    categoryDurations[pomodoro.categoryId] = (categoryDurations[pomodoro.categoryId] ?: 0L) + duration
-                    dayCategories.add(pomodoro.categoryId)
+            for (session in sessions) {
+                val durationMs = (sessionEndWithinDay(session, dayEnd, now) - maxOf(session.startTime, dayStart))
+                    .coerceAtLeast(0L)
+                if (durationMs <= 0L) continue
+                session.categoryId?.let { catId ->
+                    categoryDurations[catId] = (categoryDurations[catId] ?: 0L) + durationMs
+                    dayCategories.add(catId)
+                }
+                val catType = session.categoryId?.let { _categories.value[it]?.type } ?: session.type
+                val minutes = durationMs / 60000.0
+                when (catType) {
+                    "LEARNING" -> learningMinutes += minutes
+                    "PRODUCTIVE", "ACTIVITY" -> productiveMinutes += minutes
+                    "EXERCISE" -> exerciseMinutes += minutes
+                    "SOCIAL" -> socialMinutes += minutes
+                    "SLEEP" -> sleepHours += minutes / 60.0
                 }
             }
+
+            if (categoryDurations.isNotEmpty() || sessions.isNotEmpty()) runningStreak++ else runningStreak = 0
 
             val vector = routineEngine.calculateDailyRoutineVector(sessions, categoryDurations)
             dailyVectors.add(vector)
@@ -514,7 +639,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
             noveltyScores.add(dayNovelty)
             recentCategorySets.add(dayCategories)
-            growthScores.add(_growthScore.value)
+            growthScores.add(
+                growthEngine.calculateGrowthScore(
+                    learningMinutes = learningMinutes,
+                    productiveMinutes = productiveMinutes,
+                    exerciseMinutes = exerciseMinutes,
+                    sleepHours = sleepHours,
+                    socialMinutes = socialMinutes,
+                    noveltyScore = dayNovelty,
+                    consecutiveDaysActive = runningStreak
+                ).totalScore
+            )
         }
 
         _loopStatus.value = routineEngine.detectLoop(dailyVectors, growthScores, noveltyScores)
@@ -524,6 +659,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val zone = ZoneId.systemDefault()
         val today = _selectedDate.value
         val (dayStart, dayEnd) = getDayRange(today, zone)
+        val now = System.currentTimeMillis()
 
         val sessions = sessionRepo.getSessionsForDaySync(dayStart, dayEnd)
         val cats = _categories.value
@@ -544,40 +680,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         var totalBreakMinutes = 0.0
 
         for (session in sessions) {
-            if (session.isActive) continue
-            val duration = ((session.endTime ?: dayEnd) - session.startTime) / 60000.0
+            val duration = sessionMinutesWithinDay(session, dayStart, dayEnd, now)
+            if (duration <= 0.0) continue
             val cat = session.categoryId?.let { cats[it] }
             val catType = cat?.type ?: session.type
 
             when (catType) {
                 "PRODUCTIVE", "LEARNING", "ACTIVITY" -> totalProductiveMinutes += duration
                 "WASTED" -> totalWastedMinutes += duration
-                "NEUTRAL" -> totalBreakMinutes += duration
+                "NEUTRAL", "REST", "RECOVERY" -> totalBreakMinutes += duration
             }
         }
 
         for (pomodoro in pomodoros) {
-            if (pomodoro.isCompleted) {
-                when (pomodoro.type) {
-                    "WORK" -> totalProductiveMinutes += pomodoro.durationMinutes
-                    "BREAK" -> totalBreakMinutes += pomodoro.durationMinutes
-                }
+            if (pomodoro.isCompleted && pomodoro.type == "BREAK") {
+                totalBreakMinutes += sessionMinutesWithinPomodoro(pomodoro)
             }
         }
-
-        val todoMinutes = todoRepo.getTotalCompletedMinutesInRange(dayStart, dayEnd)
-        totalProductiveMinutes += todoMinutes
 
         val yesterday = today.minusDays(1)
         val (yesterdayStart, yesterdayEnd) = getDayRange(yesterday, zone)
         val yesterdaySessions = sessionRepo.getSessionsForDaySync(yesterdayStart, yesterdayEnd)
         var yesterdayWastedMinutes = 0.0
         for (session in yesterdaySessions) {
-            if (session.isActive) continue
             val cat = session.categoryId?.let { cats[it] }
             val catType = cat?.type ?: session.type
             if (catType == "WASTED") {
-                yesterdayWastedMinutes += ((session.endTime ?: yesterdayEnd) - session.startTime) / 60000.0
+                yesterdayWastedMinutes += sessionMinutesWithinDay(session, yesterdayStart, yesterdayEnd, now)
             }
         }
 
@@ -597,12 +726,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             noNewActivitiesDays = if (loop?.isLoopDetected == true) 5 else 0,
             noMovementToday = !hasExercise,
             noReflectionToday = false,
-            exerciseMinutes = sessions.filter { !it.isActive && (it.type == "EXERCISE" || cats[it.categoryId]?.type == "EXERCISE") }.sumOf {
-                ((it.endTime ?: dayEnd) - it.startTime) / 60000.0
-            },
-            sleepHours = sessions.filter { !it.isActive && (it.type == "SLEEP" || cats[it.categoryId]?.type == "SLEEP") }.sumOf {
-                ((it.endTime ?: dayEnd) - it.startTime) / 3600000.0
-            },
+            exerciseMinutes = sessions.filter { it.type == "EXERCISE" || cats[it.categoryId]?.type == "EXERCISE" }
+                .sumOf { sessionMinutesWithinDay(it, dayStart, dayEnd, now) },
+            sleepHours = sessions.filter { it.type == "SLEEP" || cats[it.categoryId]?.type == "SLEEP" }
+                .sumOf { sessionMinutesWithinDay(it, dayStart, dayEnd, now) / 60.0 },
             fatigueLevel = 2,
             severeSymptoms = emptyList(),
             maintenanceMode = false
@@ -618,7 +745,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             pomodoroCount = pomodoros.count { it.type == "WORK" && it.isCompleted }
         )
 
-        val now = System.currentTimeMillis()
         for (template in templates + smartInsights) {
             val insight = insightEngine.createInsightEntity(template)
             insightRepo.insertIfNotCoolingDown(insight)
@@ -710,10 +836,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun calculateWeeklyStats() {
         val zone = ZoneId.systemDefault()
         val today = _selectedDate.value
+        val now = System.currentTimeMillis()
 
         var totalProductive = 0
         var totalWasted = 0
         var totalFree = 0
+        var totalSleep = 0
+        var totalSocial = 0
+        var totalRecovery = 0
         var totalCompletedTodos = 0
 
         for (i in 0..6) {
@@ -723,15 +853,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val cats = _categories.value
 
             for (session in sessions) {
-                if (session.isActive) continue
-                val duration = ((session.endTime ?: dayEnd) - session.startTime) / 60000
+                val duration = sessionMinutesWithinDay(session, dayStart, dayEnd, now)
+                if (duration <= 0.0) continue
                 val cat = session.categoryId?.let { cats[it] }
                 val catType = cat?.type ?: session.type
+                val minutes = duration.toInt()
 
                 when (catType) {
-                    "PRODUCTIVE", "LEARNING", "ACTIVITY", "EXERCISE" -> totalProductive += duration.toInt()
-                    "WASTED" -> totalWasted += duration.toInt()
-                    "NEUTRAL" -> totalFree += duration.toInt()
+                    "PRODUCTIVE", "LEARNING", "ACTIVITY", "EXERCISE" -> totalProductive += minutes
+                    "WASTED" -> totalWasted += minutes
+                    "SLEEP" -> totalSleep += minutes
+                    "SOCIAL" -> totalSocial += minutes
+                    "RECOVERY", "REST" -> totalRecovery += minutes
+                    else -> totalFree += minutes
                 }
             }
 
@@ -742,6 +876,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             totalProductiveMinutes = totalProductive,
             totalWastedMinutes = totalWasted,
             totalFreeMinutes = totalFree,
+            totalSleepMinutes = totalSleep,
+            totalSocialMinutes = totalSocial,
+            totalRecoveryMinutes = totalRecovery,
             completedTodos = totalCompletedTodos,
             activeTodos = _activeTodoCount.value,
             averageProductivePerDay = totalProductive / 7
@@ -752,6 +889,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val zone = ZoneId.systemDefault()
         val today = _selectedDate.value
         val cats = _categories.value
+        val now = System.currentTimeMillis()
         val dailyData = mutableListOf<Pair<String, Float>>()
 
         val dayLabels = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -760,23 +898,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val date = today.minusDays(i.toLong())
             val (dayStart, dayEnd) = getDayRange(date, zone)
             val sessions = sessionRepo.getSessionsForDaySync(dayStart, dayEnd)
-            val pomodoros = pomodoroRepo.getPomodorosForDaySync(dayStart, dayEnd)
 
             var productiveMinutes = 0f
 
             for (session in sessions) {
-                if (session.isActive) continue
-                val duration = ((session.endTime ?: dayEnd) - session.startTime) / 60000f
+                val duration = sessionMinutesWithinDay(session, dayStart, dayEnd, now)
+                if (duration <= 0.0) continue
                 val cat = session.categoryId?.let { cats[it] }
                 val catType = cat?.type ?: session.type
                 if (catType in listOf("PRODUCTIVE", "LEARNING", "ACTIVITY", "EXERCISE")) {
-                    productiveMinutes += duration
-                }
-            }
-
-            for (p in pomodoros) {
-                if (p.isCompleted && p.type == "WORK") {
-                    productiveMinutes += p.durationMinutes
+                    productiveMinutes += duration.toFloat()
                 }
             }
 
@@ -799,7 +930,14 @@ data class WeeklyStats(
     val totalProductiveMinutes: Int = 0,
     val totalWastedMinutes: Int = 0,
     val totalFreeMinutes: Int = 0,
+    val totalSleepMinutes: Int = 0,
+    val totalSocialMinutes: Int = 0,
+    val totalRecoveryMinutes: Int = 0,
     val completedTodos: Int = 0,
     val activeTodos: Int = 0,
     val averageProductivePerDay: Int = 0
-)
+) {
+    val totalTrackedMinutes: Int
+        get() = totalProductiveMinutes + totalWastedMinutes + totalFreeMinutes +
+            totalSleepMinutes + totalSocialMinutes + totalRecoveryMinutes
+}

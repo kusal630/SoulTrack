@@ -42,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SessionEntity
 import io.github.dailytrack.ui.Screen
+import io.github.dailytrack.ui.navigateSingleTop
 import io.github.dailytrack.ui.components.*
 import io.github.dailytrack.ui.theme.*
 import io.github.dailytrack.ui.viewmodel.MainViewModel
@@ -81,7 +82,10 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
+                    IconButton(onClick = { navController.navigateSingleTop(Screen.Habits.route) }) {
+                        Icon(Icons.Default.Flag, contentDescription = "Habits")
+                    }
+                    IconButton(onClick = { navController.navigateSingleTop(Screen.Settings.route) }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 },
@@ -120,7 +124,9 @@ fun DashboardScreen(
                 TimeTrackingCard(coverage = todayCoverage)
             }
 
-            if (todayCoverage != null && todayCoverage!!.trackedSeconds > 0) {
+            if (todayCoverage != null &&
+                (todayCoverage!!.trackedSeconds + todayCoverage!!.untrackedSeconds) > 0
+            ) {
                 item {
                     TimeBreakdownPieChart(
                         data = listOf(
@@ -142,7 +148,7 @@ fun DashboardScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilledTonalButton(
-                        onClick = { navController.navigate(Screen.Timer.route) },
+                        onClick = { navController.navigateSingleTop(Screen.Timer.route) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(
@@ -153,7 +159,7 @@ fun DashboardScreen(
                         Text(if (activeSession != null) "View Timer" else "Start Timer")
                     }
                     FilledTonalButton(
-                        onClick = { navController.navigate(Screen.Growth.route) },
+                        onClick = { navController.navigateSingleTop(Screen.Growth.route) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(Icons.Default.TrendingUp, contentDescription = null)
@@ -207,7 +213,10 @@ fun DashboardScreen(
             }
 
             item {
-                GrowthScoreCard(score = growthScore)
+                GrowthScoreCard(
+                    score = growthScore,
+                    hasData = (todayCoverage?.trackedSeconds ?: 0L) > 0L
+                )
             }
 
             if (completedSessions.isNotEmpty()) {
@@ -502,7 +511,7 @@ fun CompletedSessionCard(
 }
 
 @Composable
-fun GrowthScoreCard(score: Double) {
+fun GrowthScoreCard(score: Double, hasData: Boolean = true) {
     val animatedScore by animateFloatAsState(
         targetValue = score.toFloat(),
         animationSpec = tween(1000, easing = FastOutSlowInEasing),
@@ -510,6 +519,7 @@ fun GrowthScoreCard(score: Double) {
     )
 
     val scoreColor = when {
+        !hasData -> NeutralColor
         score >= 70 -> ProductiveColor
         score >= 40 -> ExerciseColor
         else -> WastedColor
@@ -542,7 +552,7 @@ fun GrowthScoreCard(score: Double) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Today's progress",
+                    text = if (hasData) "Today's progress" else "No tracked time yet",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -636,7 +646,7 @@ fun InsightCard(insight: io.github.dailytrack.data.db.entity.InsightEntity, onDi
                     )
                 }
             }
-            IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                 Icon(
                     Icons.Default.Close,
                     contentDescription = "Dismiss",

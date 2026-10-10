@@ -37,12 +37,12 @@ data class TimeCoverage(
     val totalDaySeconds: Long
 ) {
     val trackedRatio: Double
-        get() = if (totalDaySeconds > 0) trackedSeconds.toDouble() / totalDaySeconds else 0.0
+        get() = if (totalDaySeconds > 0) (trackedSeconds.toDouble() / totalDaySeconds).coerceIn(0.0, 1.0) else 0.0
 
     val productivityRatio: Double
         get() {
             val awakeSeconds = totalDaySeconds - sleepSeconds
-            return if (awakeSeconds > 0) productiveSeconds.toDouble() / awakeSeconds else 0.0
+            return if (awakeSeconds > 0) (productiveSeconds.toDouble() / awakeSeconds).coerceIn(0.0, 1.0) else 0.0
         }
 
     val totalProductiveSeconds: Long
@@ -52,7 +52,7 @@ data class TimeCoverage(
         get() = wastedSeconds
 
     val awakeUntrackedSeconds: Long
-        get() = untrackedSeconds - sleepSeconds
+        get() = untrackedSeconds.coerceAtLeast(0)
 }
 
 class TimeCoverageEngine {
@@ -61,11 +61,29 @@ class TimeCoverageEngine {
         categories: Map<Long, CategoryEntity>,
         date: LocalDate,
         zone: ZoneId,
-        dayStartHour: Int = 0
+        dayStartHour: Int = 0,
+        now: Long = System.currentTimeMillis()
     ): TimeCoverage {
         val dayStart = date.atStartOfDay(zone).plusHours(dayStartHour.toLong()).toInstant().toEpochMilli()
         val dayEnd = date.plusDays(1).atStartOfDay(zone).plusHours(dayStartHour.toLong()).toInstant().toEpochMilli()
         val totalDaySeconds = (dayEnd - dayStart) / 1000
+
+        val intervals = mutableListOf<Triple<Long, Long, String>>()
+
+        for (session in sessions) {
+            val rawEnd = if (session.isActive) now else session.endTime
+            if (rawEnd == null) continue
+
+            val sessionStart = maxOf(session.startTime, dayStart)
+            val sessionEnd = minOf(rawEnd, dayEnd)
+            if (sessionEnd <= sessionStart) continue
+
+            val category = session.categoryId?.let { categories[it] }
+            val categoryType = category?.type ?: session.type
+            intervals.add(Triple(sessionStart, sessionEnd, categoryType))
+        }
+
+        intervals.sortBy { it.first }
 
         var trackedSeconds = 0L
         var productiveSeconds = 0L
@@ -77,32 +95,46 @@ class TimeCoverageEngine {
         var socialSeconds = 0L
         var recoverySeconds = 0L
 
-        for (session in sessions) {
-            if (session.isActive) continue
-            if (session.endTime == null) continue
+        var mergedStart = -1L
+        var mergedEnd = -1L
+        var mergedType = ""
 
-            val sessionStart = maxOf(session.startTime, dayStart)
-            val sessionEnd = minOf(session.endTime, dayEnd)
-            if (sessionEnd > sessionStart) {
-                val duration = (sessionEnd - sessionStart) / 1000
-                trackedSeconds += duration
-
-                val category = session.categoryId?.let { categories[it] }
-                val categoryType = category?.type ?: session.type
-
-                when (categoryType) {
-                    "SLEEP" -> sleepSeconds += duration
-                    "EXERCISE" -> exerciseSeconds += duration
-                    "LEARNING" -> learningSeconds += duration
-                    "SOCIAL" -> socialSeconds += duration
-                    "RECOVERY" -> recoverySeconds += duration
-                    "PRODUCTIVE" -> productiveSeconds += duration
-                    "WASTED" -> wastedSeconds += duration
-                    "NEUTRAL" -> neutralSeconds += duration
-                    else -> neutralSeconds += duration
-                }
+        fun flush() {
+            if (mergedStart < 0 || mergedEnd <= mergedStart) return
+            val duration = (mergedEnd - mergedStart) / 1000
+            trackedSeconds += duration
+            when (mergedType) {
+                "SLEEP" -> sleepSeconds += duration
+                "EXERCISE" -> exerciseSeconds += duration
+                "LEARNING" -> learningSeconds += duration
+                "SOCIAL" -> socialSeconds += duration
+                "RECOVERY", "REST" -> recoverySeconds += duration
+                "PRODUCTIVE", "ACTIVITY" -> productiveSeconds += duration
+                "WASTED" -> wastedSeconds += duration
+                else -> neutralSeconds += duration
             }
         }
+
+        for ((start, end, type) in intervals) {
+            if (mergedStart < 0) {
+                mergedStart = start
+                mergedEnd = end
+                mergedType = type
+                continue
+            }
+            if (start <= mergedEnd) {
+                val previousLength = mergedEnd - mergedStart
+                val newLength = end - start
+                if (newLength > previousLength) mergedType = type
+                mergedEnd = maxOf(mergedEnd, end)
+            } else {
+                flush()
+                mergedStart = start
+                mergedEnd = end
+                mergedType = type
+            }
+        }
+        flush()
 
         val untrackedSeconds = (totalDaySeconds - trackedSeconds).coerceAtLeast(0)
 

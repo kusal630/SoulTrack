@@ -1,0 +1,15 @@
+* Day reports now count sessions that cross midnight correctly
+* Time coverage includes running sessions, merges overlapping intervals, and clamps ratios
+* Pomodoro focus/break sessions are restored after a process restart instead of getting stuck
+* Pomodoro auto-advances to the break/focus phase immediately when the timer expires
+* Do Not Disturb is always restored when a session ends
+* Stopping the timer now closes the running session on disk and on the widget
+* Dashboard and Insights no longer double-count Pomodoro and to-do minutes
+* Weekly time distribution now shows sleep, social, and recovery slices
+* Growth score is neutral instead of red before you have any tracked time
+* Habits screen is now reachable from the home screen
+* Top-level tabs go Home from their back arrow, and tab jumps no longer stack up
+* Timer and Pomodoro screens tick once per second instead of ten times
+* "Clear All" completed tasks asks for confirmation
+* Larger touch targets on task actions and insight dismiss buttons
+* About screen shows the real app version

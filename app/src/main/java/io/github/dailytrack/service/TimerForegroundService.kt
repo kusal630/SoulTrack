@@ -96,8 +96,16 @@ class TimerForegroundService : Service() {
             ACTION_STOP -> {
                 timerJob?.cancel()
                 sedentaryJob?.cancel()
+                wastedWarningJob?.cancel()
+                breakReminderJob?.cancel()
                 val prefs = getSharedPreferences("widget_prefs", MODE_PRIVATE)
-                prefs.edit().putBoolean("is_running", false).apply()
+                prefs.edit().putBoolean("is_running", false).putLong("session_id", -1L).apply()
+                closeActiveSession()
+                if (isPomodoroSession) {
+                    val stopPomodoro = Intent(this, PomodoroForegroundService::class.java)
+                        .setAction(PomodoroForegroundService.ACTION_STOP)
+                    runCatching { startService(stopPomodoro) }
+                }
                 notificationManager?.cancel(NOTIFICATION_ID)
                 notificationManager?.cancel(SEDENTARY_NOTIFICATION_ID)
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -107,19 +115,26 @@ class TimerForegroundService : Service() {
             }
         }
 
-        startTime = intent?.getLongExtra(EXTRA_START_TIME, System.currentTimeMillis())
-            ?: System.currentTimeMillis()
-        sessionTitle = intent?.getStringExtra(EXTRA_TITLE) ?: "Active Session"
-        categoryName = intent?.getStringExtra(EXTRA_CATEGORY) ?: ""
-        categoryType = intent?.getStringExtra(EXTRA_CATEGORY_TYPE) ?: ""
-        isPomodoroSession = intent?.getBooleanExtra(EXTRA_IS_POMODORO, false) ?: false
-
         val prefs = getSharedPreferences("widget_prefs", MODE_PRIVATE)
+        if (intent == null) {
+            startTime = prefs.getLong("start_time", 0L).takeIf { it > 0L } ?: System.currentTimeMillis()
+            sessionTitle = prefs.getString("session_name", null) ?: "Active Session"
+            categoryName = prefs.getString("category_name", "") ?: ""
+            categoryType = prefs.getString("category_type", "") ?: ""
+        } else {
+            startTime = intent.getLongExtra(EXTRA_START_TIME, System.currentTimeMillis())
+            sessionTitle = intent.getStringExtra(EXTRA_TITLE) ?: "Active Session"
+            categoryName = intent.getStringExtra(EXTRA_CATEGORY) ?: ""
+            categoryType = intent.getStringExtra(EXTRA_CATEGORY_TYPE) ?: ""
+            isPomodoroSession = intent.getBooleanExtra(EXTRA_IS_POMODORO, false)
+        }
+
         prefs.edit()
             .putBoolean("is_running", true)
             .putLong("start_time", startTime)
             .putString("session_name", sessionTitle)
             .putString("category_name", categoryName)
+            .putString("category_type", categoryType)
             .apply()
 
         val notification = buildNotification()
@@ -140,6 +155,13 @@ class TimerForegroundService : Service() {
         }
         TimerWidgetProvider.updateWidgets(this)
         return START_STICKY
+    }
+
+    private fun closeActiveSession() {
+        val db = (applicationContext as SoulTrackApp).database
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { db.sessionDao().stopActiveSession(System.currentTimeMillis()) }
+        }
     }
 
     private fun startNotificationUpdates() {
@@ -169,7 +191,7 @@ class TimerForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val elapsed = System.currentTimeMillis() - startTime
+        val elapsed = (System.currentTimeMillis() - startTime).coerceAtLeast(0L)
         val hours = elapsed / 3600000
         val minutes = (elapsed % 3600000) / 60000
         val seconds = (elapsed % 60000) / 1000

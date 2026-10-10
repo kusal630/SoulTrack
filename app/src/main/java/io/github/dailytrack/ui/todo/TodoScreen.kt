@@ -39,6 +39,7 @@ import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SubtaskEntity
 import io.github.dailytrack.data.db.entity.TodoEntity
 import io.github.dailytrack.ui.components.*
+import io.github.dailytrack.ui.navigateToHome
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -68,6 +69,7 @@ fun TodoScreen(
     var showPriorityWarning by remember { mutableStateOf(false) }
     var pendingPomodoroTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showClearCompletedDialog by remember { mutableStateOf(false) }
 
     val filteredTodos = remember(activeTodos, activeFilter, sortOrder) {
         val filtered = when (activeFilter) {
@@ -93,7 +95,7 @@ fun TodoScreen(
             TopAppBar(
                 title = { Text("Todo List") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.navigateToHome() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -230,7 +232,7 @@ fun TodoScreen(
                             color = Color(0xFF2E7D32)
                         )
                         TextButton(
-                            onClick = { viewModel.deleteCompletedTodos() },
+                            onClick = { showClearCompletedDialog = true },
                             colors = ButtonDefaults.textButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
                             )
@@ -275,6 +277,37 @@ fun TodoScreen(
 
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
+    }
+
+    if (showClearCompletedDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCompletedDialog = false },
+            title = { Text("Clear completed tasks?") },
+            text = {
+                Text(
+                    "This permanently deletes ${completedTodos.size} completed " +
+                        if (completedTodos.size == 1) "task." else "tasks. This cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearCompletedDialog = false
+                        viewModel.deleteCompletedTodos()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Clear All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCompletedDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showPriorityWarning && pendingPomodoroTodo != null) {
@@ -593,7 +626,7 @@ fun TodoItemCard(
                 horizontalArrangement = Arrangement.End
             ) {
                 if (subtasks.isNotEmpty()) {
-                    IconButton(onClick = { showSubtasks = !showSubtasks }, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { showSubtasks = !showSubtasks }, modifier = Modifier.size(48.dp)) {
                         Icon(
                             if (showSubtasks) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             contentDescription = "Toggle subtasks",
@@ -601,13 +634,13 @@ fun TodoItemCard(
                         )
                     }
                 }
-                IconButton(onClick = onStartPomodoro, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onStartPomodoro, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Default.Timer, contentDescription = "Start Pomodoro", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                 }
-                IconButton(onClick = { showEditDialog = true }, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = { showEditDialog = true }, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                 }
             }

@@ -41,6 +41,15 @@ interface PomodoroSessionDao {
     @Query("SELECT * FROM pomodoro_sessions WHERE id = :id")
     suspend fun getPomodoroById(id: Long): PomodoroSessionEntity?
 
+    @Query("SELECT * FROM pomodoro_sessions WHERE isCompleted = 0 ORDER BY startTime DESC LIMIT 1")
+    fun getActivePomodoro(): Flow<PomodoroSessionEntity?>
+
+    @Query("SELECT * FROM pomodoro_sessions WHERE isCompleted = 0 ORDER BY startTime DESC LIMIT 1")
+    suspend fun getActivePomodoroSync(): PomodoroSessionEntity?
+
+    @Query("SELECT * FROM pomodoro_sessions WHERE isCompleted = 0")
+    suspend fun getAllActivePomodorosSync(): List<PomodoroSessionEntity>
+
     @Insert
     suspend fun insert(pomodoro: PomodoroSessionEntity): Long
 

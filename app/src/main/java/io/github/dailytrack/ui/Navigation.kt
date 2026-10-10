@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import io.github.dailytrack.SoulTrackApp
@@ -45,6 +46,8 @@ import io.github.dailytrack.ui.savedquotes.SavedQuotesScreen
 import io.github.dailytrack.ui.sync.SyncSettingsScreen
 import io.github.dailytrack.ui.habit.HabitScreen
 import io.github.dailytrack.ui.theme.ProductiveColor
+import io.github.dailytrack.ui.viewmodel.MainViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     data object Dashboard : Screen("dashboard", "Home", Icons.Default.Home)
@@ -67,6 +70,19 @@ val bottomNavItems = listOf(
     Screen.Insights,
 )
 
+fun NavController.navigateSingleTop(route: String) {
+    navigate(route) { launchSingleTop = true }
+}
+
+fun NavController.navigateToHome() {
+    navigate(Screen.Dashboard.route) {
+        popUpTo(graph.findStartDestination().id) {
+            inclusive = false
+        }
+        launchSingleTop = true
+    }
+}
+
 @Composable
 fun DailyTrackNavHost() {
     val navController = rememberNavController()
@@ -76,12 +92,7 @@ fun DailyTrackNavHost() {
     val currentRoute = currentBackStackEntry?.destination?.route
 
     BackHandler(enabled = currentRoute != Screen.Dashboard.route) {
-        navController.navigate(Screen.Dashboard.route) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                inclusive = false
-            }
-            launchSingleTop = true
-        }
+        navController.navigateToHome()
     }
 
     Scaffold(
@@ -152,6 +163,17 @@ fun DailyTrackNavHost() {
                 SyncSettingsScreen(navController, app.syncManager)
             }
             composable(Screen.Habits.route) {
+                val viewModel: MainViewModel = viewModel()
+                val habits by viewModel.habits.collectAsState()
+                val completions by viewModel.habitCompletions.collectAsState()
+                HabitScreen(
+                    navController = navController,
+                    habits = habits,
+                    completions = completions,
+                    onAddHabit = viewModel::addHabit,
+                    onToggleHabit = viewModel::toggleHabit,
+                    onDeleteHabit = viewModel::deleteHabit
+                )
             }
         }
     }

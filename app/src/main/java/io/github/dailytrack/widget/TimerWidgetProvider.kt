@@ -137,30 +137,13 @@ class TimerWidgetProvider : AppWidgetProvider() {
 
             ACTION_STOP -> {
                 val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
-                val sessionId = prefs.getLong("session_id", -1L)
                 val now = System.currentTimeMillis()
 
-                val stopIntent = Intent(context, TimerForegroundService::class.java).apply {
-                    action = TimerForegroundService.ACTION_STOP
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(stopIntent)
-                } else {
-                    context.startService(stopIntent)
-                }
+                stopTimerService(context)
 
                 val db = (context.applicationContext as SoulTrackApp).database
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-                    if (sessionId > 0) {
-                        val session = db.sessionDao().getSessionById(sessionId)
-                        if (session != null && session.isActive) {
-                            db.sessionDao().update(
-                                session.copy(endTime = now, isActive = false, updatedAt = now)
-                            )
-                        }
-                    } else {
-                        db.sessionDao().stopActiveSession(now)
-                    }
+                    runCatching { db.sessionDao().stopActiveSession(now) }
                 }
 
                 prefs.edit()
@@ -173,6 +156,15 @@ class TimerWidgetProvider : AppWidgetProvider() {
 
             ACTION_RESET -> {
                 val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
+                val now = System.currentTimeMillis()
+
+                stopTimerService(context)
+
+                val db = (context.applicationContext as SoulTrackApp).database
+                CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                    runCatching { db.sessionDao().stopActiveSession(now) }
+                }
+
                 prefs.edit()
                     .putBoolean("is_running", false)
                     .putLong("start_time", 0L)
@@ -212,6 +204,16 @@ class TimerWidgetProvider : AppWidgetProvider() {
             ACTION_UPDATE -> {
                 updateAllWidgets(context)
             }
+        }
+    }
+
+    private fun stopTimerService(context: Context) {
+        val stopIntent = Intent(context, TimerForegroundService::class.java).apply {
+            action = TimerForegroundService.ACTION_STOP
+        }
+        val started = runCatching { context.startService(stopIntent) }.isSuccess
+        if (!started) {
+            runCatching { context.stopService(Intent(context, TimerForegroundService::class.java)) }
         }
     }
 
@@ -257,7 +259,7 @@ class TimerWidgetProvider : AppWidgetProvider() {
         }
 
         if (isRunning && startTime > 0) {
-            val elapsed = (System.currentTimeMillis() - startTime) / 1000
+            val elapsed = ((System.currentTimeMillis() - startTime) / 1000).coerceAtLeast(0L)
             val h = elapsed / 3600
             val m = (elapsed % 3600) / 60
             val s = elapsed % 60

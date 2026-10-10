@@ -35,12 +35,17 @@ class PomodoroForegroundService : Service() {
     private var breakDurationMinutes: Int = 5
     private var longBreakDurationMinutes: Int = 15
     private var todoTitle: String = ""
+    private var todoId: Long? = null
+    private var categoryId: Long? = null
     private var currentSessionNumber: Int = 0
     private var isBreak: Boolean = false
     private var isLongBreak: Boolean = false
     private var startTime: Long = 0L
     private var workColor: Int = 0xFFE94560.toInt()
-    private var dndWasEnabled: Boolean = false
+    private var dndOriginalFilter: Int = NotificationManager.INTERRUPTION_FILTER_ALL
+    private var dndChanged: Boolean = false
+    private var transitioning: Boolean = false
+    private var stopped: Boolean = false
 
     companion object {
         const val CHANNEL_WORK = "soultrack_work"
@@ -50,6 +55,7 @@ class PomodoroForegroundService : Service() {
         const val NOTIFICATION_ID = 1002
         const val SEDENTARY_NOTIFICATION_ID = 1003
         const val TRANSITION_NOTIFICATION_ID = 1005
+        const val COMPLETION_NOTIFICATION_ID = 1006
 
         const val ACTION_STOP = "io.github.dailytrack.STOP_POMODORO"
         const val ACTION_COMPLETE_WORK = "io.github.dailytrack.COMPLETE_POMODORO_WORK"
@@ -60,6 +66,8 @@ class PomodoroForegroundService : Service() {
         const val EXTRA_WORK_DURATION = "work_duration"
         const val EXTRA_BREAK_DURATION = "break_duration"
         const val EXTRA_TODO_TITLE = "todo_title"
+        const val EXTRA_TODO_ID = "todo_id"
+        const val EXTRA_CATEGORY_ID = "category_id"
         const val EXTRA_WORK_COLOR = "work_color"
         const val EXTRA_SESSION_NUMBER = "session_number"
         const val EXTRA_IS_BREAK = "is_break"
@@ -93,41 +101,68 @@ class PomodoroForegroundService : Service() {
                 isLongBreak = false
                 startWorkSession(
                     workDuration = intent.getIntExtra(EXTRA_WORK_DURATION, workDurationMinutes),
-                    title = intent.getStringExtra(EXTRA_TODO_TITLE) ?: todoTitle
+                    title = intent.getStringExtra(EXTRA_TODO_TITLE) ?: todoTitle,
+                    startTime = intent.getLongExtra(EXTRA_START_TIME, System.currentTimeMillis())
                 )
                 return START_STICKY
             }
         }
 
-        workDurationMinutes = intent?.getIntExtra(EXTRA_WORK_DURATION, 25) ?: 25
-        breakDurationMinutes = intent?.getIntExtra(EXTRA_BREAK_DURATION, 5) ?: 5
-        longBreakDurationMinutes = intent?.getIntExtra(EXTRA_LONG_BREAK_DURATION, 15) ?: 15
-        todoTitle = intent?.getStringExtra(EXTRA_TODO_TITLE) ?: ""
-        workColor = intent?.getIntExtra(EXTRA_WORK_COLOR, 0xFFE94560.toInt()) ?: 0xFFE94560.toInt()
-        currentSessionNumber = intent?.getIntExtra(EXTRA_SESSION_NUMBER, 0) ?: 0
-        isBreak = intent?.getBooleanExtra(EXTRA_IS_BREAK, false) ?: false
-        isLongBreak = intent?.getBooleanExtra(EXTRA_IS_LONG_BREAK, false) ?: false
+        if (intent == null) {
+            return if (restoreFromPrefs()) START_STICKY else START_NOT_STICKY
+        }
 
-        startWorkSession(workDurationMinutes, todoTitle)
+        workDurationMinutes = intent.getIntExtra(EXTRA_WORK_DURATION, 25)
+        breakDurationMinutes = intent.getIntExtra(EXTRA_BREAK_DURATION, 5)
+        longBreakDurationMinutes = intent.getIntExtra(EXTRA_LONG_BREAK_DURATION, 15)
+        todoTitle = intent.getStringExtra(EXTRA_TODO_TITLE) ?: ""
+        todoId = intent.getLongExtra(EXTRA_TODO_ID, -1L).takeIf { it > 0 }
+        categoryId = intent.getLongExtra(EXTRA_CATEGORY_ID, -1L).takeIf { it > 0 }
+        workColor = intent.getIntExtra(EXTRA_WORK_COLOR, 0xFFE94560.toInt())
+        currentSessionNumber = intent.getIntExtra(EXTRA_SESSION_NUMBER, 0)
+        val requestedBreak = intent.getBooleanExtra(EXTRA_IS_BREAK, false)
+        val requestedLongBreak = intent.getBooleanExtra(EXTRA_IS_LONG_BREAK, false)
+        val requestedStartTime = intent.getLongExtra(EXTRA_START_TIME, System.currentTimeMillis())
+
+        if (requestedBreak) {
+            startBreakSession(
+                durationMinutes = intent.getIntExtra(EXTRA_BREAK_DURATION, breakDurationMinutes),
+                isLong = requestedLongBreak,
+                startTime = requestedStartTime
+            )
+        } else {
+            startWorkSession(workDurationMinutes, todoTitle, requestedStartTime)
+        }
         return START_STICKY
     }
 
-    private fun startWorkSession(workDuration: Int, title: String) {
-        timerJob?.cancel()
-        sedentaryJob?.cancel()
-        isBreak = false
-        isLongBreak = false
-        workDurationMinutes = workDuration
-        todoTitle = title
-        startTime = System.currentTimeMillis()
-
-        startTrackingSession(title)
-        enableDnd()
-        acquireWakeLock()
-        playTransitionSound(isWork = true)
-        showTransitionNotification("Focus session $currentSessionNumber started", "Stay focused for $workDuration minutes")
-
-        updatePrefs()
+    private fun restoreFromPrefs(): Boolean {
+        val prefs = getSharedPreferences("pom_widget_prefs", MODE_PRIVATE)
+        if (!prefs.getBoolean("is_running", false)) {
+            stopSelf()
+            return false
+        }
+        stopped = false
+        transitioning = false
+        isBreak = prefs.getBoolean("is_break", false)
+        isLongBreak = prefs.getBoolean("is_long_break", false)
+        currentSessionNumber = prefs.getInt("session_number", 0)
+        workDurationMinutes = prefs.getInt("work_duration", 25)
+        breakDurationMinutes = prefs.getInt("break_duration", 5)
+        longBreakDurationMinutes = prefs.getInt("long_break_duration", 15)
+        workColor = prefs.getInt("work_color", 0xFFE94560.toInt())
+        todoTitle = prefs.getString("todo_title", "") ?: ""
+        startTime = prefs.getLong("start_time", 0L)
+        if (startTime <= 0L) {
+            stopSelf()
+            return false
+        }
+        val totalMillis = (if (isBreak) breakDurationMinutes else workDurationMinutes) * 60_000L
+        if (System.currentTimeMillis() - startTime > totalMillis + 60_000L) {
+            finishActivePomodoros(System.currentTimeMillis())
+            stopAll()
+            return false
+        }
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
@@ -136,17 +171,50 @@ class PomodoroForegroundService : Service() {
         }
         startNotificationUpdates()
         PomodoroWidgetProvider.updateWidgets(this)
+        return true
     }
 
-    private fun startBreakSession(durationMinutes: Int, isLong: Boolean) {
+    private fun startWorkSession(workDuration: Int, title: String, startTime: Long = System.currentTimeMillis()) {
         timerJob?.cancel()
         sedentaryJob?.cancel()
+        stopped = false
+        isBreak = false
+        isLongBreak = false
+        workDurationMinutes = workDuration
+        todoTitle = title
+        this.startTime = startTime
+
+        insertActivePomodoroRow(type = "WORK", durationMinutes = workDuration, startTime = startTime)
+        startTrackingSession(title, startTime)
+        enableDnd()
+        acquireWakeLock()
+        playTransitionSound(isWork = true)
+        showTransitionNotification(
+            "Focus session ${currentSessionNumber + 1} started",
+            "Stay focused for $workDuration minutes"
+        )
+
+        updatePrefs()
+        promoteToForeground()
+        startNotificationUpdates()
+        PomodoroWidgetProvider.updateWidgets(this)
+    }
+
+    private fun startBreakSession(
+        durationMinutes: Int,
+        isLong: Boolean,
+        startTime: Long = System.currentTimeMillis()
+    ) {
+        timerJob?.cancel()
+        sedentaryJob?.cancel()
+        stopped = false
         isBreak = true
         isLongBreak = isLong
         breakDurationMinutes = durationMinutes
-        startTime = System.currentTimeMillis()
+        this.startTime = startTime
 
         stopTrackingSession()
+        insertActivePomodoroRow(type = "BREAK", durationMinutes = durationMinutes, startTime = startTime)
         disableDnd()
         acquireWakeLock()
         playTransitionSound(isWork = false)
@@ -154,95 +222,173 @@ class PomodoroForegroundService : Service() {
         showBreakQuoteNotification("$breakLabel started", "Relax for $durationMinutes minutes")
 
         updatePrefs()
-        val breakNotification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, breakNotification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIFICATION_ID, breakNotification)
-        }
+        promoteToForeground()
         startNotificationUpdates()
         scheduleSedentaryReminder()
         scheduleEyeBlinkReminder()
         PomodoroWidgetProvider.updateWidgets(this)
     }
 
-    private fun onWorkSessionComplete() {
-        timerJob?.cancel()
-        sedentaryJob?.cancel()
-        playCompletionVibration()
+    private fun promoteToForeground() {
+        val notification = buildNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
 
+    private fun insertActivePomodoroRow(type: String, durationMinutes: Int, startTime: Long) {
         val db = (applicationContext as SoulTrackApp).database
         CoroutineScope(Dispatchers.IO).launch {
-            val now = System.currentTimeMillis()
-            db.pomodoroSessionDao().completeActiveSession(now)
-        }
-
-        currentSessionNumber++
-        showTransitionNotification(
-            "Session $currentSessionNumber completed!",
-            "Great work! Time for a break."
-        )
-
-        scope.launch {
-            delay(2000L)
-            if (currentSessionNumber % 4 == 0) {
-                startBreakSession(longBreakDurationMinutes, isLong = true)
-            } else {
-                startBreakSession(breakDurationMinutes, isLong = false)
+            runCatching {
+                db.pomodoroSessionDao().insert(
+                    io.github.dailytrack.data.db.entity.PomodoroSessionEntity(
+                        todoId = todoId,
+                        categoryId = categoryId,
+                        startTime = startTime,
+                        durationMinutes = durationMinutes,
+                        type = type,
+                        isCompleted = false
+                    )
+                )
             }
         }
     }
 
-    private fun onBreakComplete() {
+    private fun finishActivePomodoros(now: Long) {
+        val db = (applicationContext as SoulTrackApp).database
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                val active = db.pomodoroSessionDao().getAllActivePomodorosSync()
+                for (pomodoro in active) {
+                    val plannedEnd = pomodoro.startTime + pomodoro.durationMinutes * 60_000L
+                    val naturalCompletion = now >= plannedEnd
+                    val end = if (naturalCompletion) plannedEnd else now
+                    db.pomodoroSessionDao().completePomodoro(pomodoro.id, end)
+                    if (pomodoro.type == "WORK") {
+                        creditTodo(pomodoro, end, naturalCompletion, db)
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun creditTodo(
+        pomodoro: io.github.dailytrack.data.db.entity.PomodoroSessionEntity,
+        endTime: Long,
+        naturalCompletion: Boolean,
+        db: io.github.dailytrack.data.db.AppDatabase
+    ) {
+        val linkedTodoId = pomodoro.todoId ?: return
+        val todo = db.todoDao().getTodoById(linkedTodoId) ?: return
+        val actualMinutes = ((endTime - pomodoro.startTime) / 60_000L).toInt().coerceAtLeast(1)
+        val countDelta = if (naturalCompletion) 1 else 0
+        db.todoDao().update(
+            todo.copy(
+                actualMinutes = todo.actualMinutes + actualMinutes,
+                pomodoroCount = todo.pomodoroCount + countDelta,
+                updatedAt = endTime
+            )
+        )
+    }
+
+    private fun onWorkSessionComplete() {
+        if (transitioning || stopped) return
+        transitioning = true
         timerJob?.cancel()
         sedentaryJob?.cancel()
         playCompletionVibration()
 
         val db = (applicationContext as SoulTrackApp).database
         CoroutineScope(Dispatchers.IO).launch {
-            val now = System.currentTimeMillis()
-            db.pomodoroSessionDao().completeActiveSession(now)
+            runCatching {
+                val now = System.currentTimeMillis()
+                val active = db.pomodoroSessionDao().getActivePomodoroSync()
+                if (active != null && active.type == "WORK") {
+                    val plannedEnd = active.startTime + active.durationMinutes * 60_000L
+                    val end = maxOf(active.startTime, minOf(now, plannedEnd))
+                    db.pomodoroSessionDao().completePomodoro(active.id, end)
+                    creditTodo(active, end, naturalCompletion = true, db = db)
+                }
+            }
         }
 
-        showTransitionNotification(
+        currentSessionNumber++
+        showCompletionNotification(
+            "Session $currentSessionNumber completed!",
+            "Great work! Time for a break."
+        )
+
+        val longBreak = currentSessionNumber % 4 == 0
+        startBreakSession(
+            durationMinutes = if (longBreak) longBreakDurationMinutes else breakDurationMinutes,
+            isLong = longBreak
+        )
+        transitioning = false
+    }
+
+    private fun onBreakComplete() {
+        if (transitioning || stopped) return
+        transitioning = true
+        timerJob?.cancel()
+        sedentaryJob?.cancel()
+        playCompletionVibration()
+
+        val db = (applicationContext as SoulTrackApp).database
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                val now = System.currentTimeMillis()
+                val active = db.pomodoroSessionDao().getActivePomodoroSync()
+                if (active != null && active.type == "BREAK") {
+                    val plannedEnd = active.startTime + active.durationMinutes * 60_000L
+                    db.pomodoroSessionDao().completePomodoro(active.id, minOf(now, plannedEnd))
+                }
+            }
+        }
+
+        showCompletionNotification(
             "Break ended",
             "Ready for the next focus session?"
         )
 
-        scope.launch {
-            delay(2000L)
-            startWorkSession(workDurationMinutes, todoTitle)
-        }
+        if (isLongBreak) currentSessionNumber = 0
+        startWorkSession(workDurationMinutes, todoTitle)
+        transitioning = false
     }
 
     private fun stopAll() {
+        stopped = true
+        transitioning = false
         timerJob?.cancel()
         sedentaryJob?.cancel()
+        finishActivePomodoros(System.currentTimeMillis())
         stopTrackingSession()
         disableDnd()
         releaseWakeLock()
         notificationManager?.cancel(NOTIFICATION_ID)
         notificationManager?.cancel(SEDENTARY_NOTIFICATION_ID)
         notificationManager?.cancel(TRANSITION_NOTIFICATION_ID)
+        notificationManager?.cancel(COMPLETION_NOTIFICATION_ID)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         PomodoroWidgetProvider.updateWidgets(this)
     }
 
-    private fun startTrackingSession(title: String) {
+    private fun startTrackingSession(title: String, sessionStart: Long = System.currentTimeMillis()) {
         val db = (applicationContext as SoulTrackApp).database
         CoroutineScope(Dispatchers.IO).launch {
-            db.sessionDao().deactivateAllSessions(System.currentTimeMillis())
+            db.sessionDao().deactivateAllSessions(sessionStart)
 
             val deepWorkCat = db.categoryDao().getIdByName("Deep Work")
             val catId = deepWorkCat ?: db.categoryDao().getIdByName("Productive")
-            val catType = if (deepWorkCat != null) "PRODUCTIVE" else "PRODUCTIVE"
+            val catType = "PRODUCTIVE"
 
             val session = SessionEntity(
                 title = title.ifBlank { "Pomodoro Focus" },
                 categoryId = catId,
                 type = catType,
-                startTime = System.currentTimeMillis(),
+                startTime = sessionStart,
                 isActive = true,
                 source = "POMODORO",
                 timezoneId = java.time.ZoneId.systemDefault().id
@@ -252,7 +398,7 @@ class PomodoroForegroundService : Service() {
             val prefs = getSharedPreferences("widget_prefs", MODE_PRIVATE)
             prefs.edit()
                 .putBoolean("is_running", true)
-                .putLong("start_time", System.currentTimeMillis())
+                .putLong("start_time", sessionStart)
                 .putLong("session_id", sessionId)
                 .putString("session_name", "Pomodoro Focus")
                 .putString("category_name", "Deep Work")
@@ -260,7 +406,7 @@ class PomodoroForegroundService : Service() {
                 .apply()
 
             val intent = Intent(this@PomodoroForegroundService, TimerForegroundService::class.java).apply {
-                putExtra(TimerForegroundService.EXTRA_START_TIME, System.currentTimeMillis())
+                putExtra(TimerForegroundService.EXTRA_START_TIME, sessionStart)
                 putExtra(TimerForegroundService.EXTRA_TITLE, title.ifBlank { "Pomodoro Focus" })
                 putExtra(TimerForegroundService.EXTRA_CATEGORY, "Deep Work")
                 putExtra(TimerForegroundService.EXTRA_CATEGORY_TYPE, "PRODUCTIVE")
@@ -314,16 +460,20 @@ class PomodoroForegroundService : Service() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (!nm.isNotificationPolicyAccessGranted) return
 
-        dndWasEnabled = nm.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL
-        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        dndOriginalFilter = nm.currentInterruptionFilter
+        dndChanged = dndOriginalFilter != NotificationManager.INTERRUPTION_FILTER_PRIORITY
+        if (dndChanged) {
+            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        }
     }
 
     private fun disableDnd() {
-        if (!dndWasEnabled) return
+        if (!dndChanged) return
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (!nm.isNotificationPolicyAccessGranted) return
-        nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_ALL)
-        dndWasEnabled = false
+        if (nm.isNotificationPolicyAccessGranted) {
+            runCatching { nm.setInterruptionFilter(dndOriginalFilter) }
+        }
+        dndChanged = false
     }
 
     private fun playTransitionSound(isWork: Boolean) {
@@ -403,6 +553,28 @@ class PomodoroForegroundService : Service() {
         notificationManager?.notify(TRANSITION_NOTIFICATION_ID, notification)
     }
 
+    private fun showCompletionNotification(title: String, text: String) {
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_TRANSITION)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .build()
+
+        notificationManager?.notify(COMPLETION_NOTIFICATION_ID, notification)
+    }
+
     private fun showBreakQuoteNotification(title: String, text: String) {
         val breakQuotes = listOf(
             "Rest when you're weary. Refresh and renewal await.",
@@ -448,6 +620,15 @@ class PomodoroForegroundService : Service() {
         timerJob?.cancel()
         timerJob = scope.launch {
             while (isActive) {
+                if (!stopped) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val totalMillis =
+                        (if (isBreak) breakDurationMinutes else workDurationMinutes) * 60_000L
+                    if (elapsed >= totalMillis) {
+                        if (isBreak) onBreakComplete() else onWorkSessionComplete()
+                        return@launch
+                    }
+                }
                 val notification = buildNotification()
                 notificationManager?.notify(NOTIFICATION_ID, notification)
                 PomodoroWidgetProvider.updateWidgets(this@PomodoroForegroundService)
@@ -478,7 +659,7 @@ class PomodoroForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val elapsed = System.currentTimeMillis() - startTime
+        val elapsed = (System.currentTimeMillis() - startTime).coerceAtLeast(0L)
         val totalMillis = (if (isBreak) breakDurationMinutes else workDurationMinutes) * 60 * 1000L
         val remaining = (totalMillis - elapsed).coerceAtLeast(0)
         val minutes = remaining / 60000
@@ -489,7 +670,7 @@ class PomodoroForegroundService : Service() {
         val title = when {
             isBreak && isLongBreak -> "Long Break"
             isBreak -> "Short Break"
-            else -> "Focus Session $currentSessionNumber"
+            else -> "Focus Session ${currentSessionNumber + 1}"
         }
         val subtitle = when {
             isBreak -> "Relax before next session"
@@ -535,6 +716,10 @@ class PomodoroForegroundService : Service() {
             .putInt("work_color", workColor)
             .putInt("session_number", currentSessionNumber)
             .putBoolean("is_long_break", isLongBreak)
+            .putInt("work_duration", workDurationMinutes)
+            .putInt("break_duration", breakDurationMinutes)
+            .putInt("long_break_duration", longBreakDurationMinutes)
+            .putString("todo_title", todoTitle)
             .apply()
     }
 
@@ -673,6 +858,7 @@ class PomodoroForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        stopped = true
         timerJob?.cancel()
         sedentaryJob?.cancel()
         disableDnd()

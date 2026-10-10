@@ -17,17 +17,13 @@
 
 package io.github.dailytrack.ui.pomodoro
 
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.compose.animation.core.*
 import androidx.compose.animation.animateColorAsState
-import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -60,7 +56,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.api.QuotesApi
 import io.github.dailytrack.data.db.entity.TodoEntity
-import io.github.dailytrack.service.PomodoroForegroundService
+import io.github.dailytrack.ui.navigateToHome
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 
@@ -81,7 +77,6 @@ fun PomodoroScreen(
     val activeTodos by viewModel.activeTodos.collectAsState()
     val savedQuotes by viewModel.savedQuotes.collectAsState()
     
-    var isBreak by remember { mutableStateOf(false) }
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
     var selectedWorkDuration by remember { mutableIntStateOf(25) }
     var selectedBreakDuration by remember { mutableIntStateOf(5) }
@@ -96,6 +91,7 @@ fun PomodoroScreen(
     var pendingWorkDuration by remember { mutableIntStateOf(25) }
 
     val isRunning = activePomodoro != null
+    val isBreak = activePomodoro?.type == "BREAK"
     val coroutineScope = rememberCoroutineScope()
 
     val activeColor = if (isBreak) BreakColor else WorkColor
@@ -113,59 +109,46 @@ fun PomodoroScreen(
     }
 
     LaunchedEffect(activePomodoro) {
-        if (activePomodoro != null) {
-            isBreak = activePomodoro?.type == "BREAK"
-            elapsedSeconds = (System.currentTimeMillis() - (activePomodoro?.startTime ?: 0L)) / 1000
-            while (true) {
-                delay(100)
-                elapsedSeconds = (System.currentTimeMillis() - (activePomodoro?.startTime ?: 0L)) / 1000
-
-                val totalSeconds = (activePomodoro?.durationMinutes ?: 25) * 60L
-                if (elapsedSeconds >= totalSeconds) {
-                    try {
-                        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                            manager.defaultVibrator
-                        } else {
-                            @Suppress("DEPRECATION")
-                            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-                        }
-                        vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
-                    } catch (_: Exception) {}
-
-                    val quote = QuotesApi.getTimedQuote()
-                    currentQuote = quote.text
-                    quoteAuthor = quote.author
-                    elapsedSeconds = 0
-                }
-            }
-        } else {
+        val pomodoro = activePomodoro
+        if (pomodoro == null) {
             elapsedSeconds = 0
+            return@LaunchedEffect
         }
-    }
 
-    DisposableEffect(Unit) {
-        val workReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                viewModel.completePomodoro()
+        val totalSeconds = pomodoro.durationMinutes * 60L
+        var firedExpiry = false
+        elapsedSeconds = ((System.currentTimeMillis() - pomodoro.startTime) / 1000).coerceAtLeast(0L)
+
+        while (true) {
+            delay(1000)
+            if (activePomodoro !== pomodoro) break
+
+            elapsedSeconds = ((System.currentTimeMillis() - pomodoro.startTime) / 1000)
+                .coerceAtLeast(0L)
+                .coerceAtMost(totalSeconds)
+
+            if (elapsedSeconds >= totalSeconds && !firedExpiry) {
+                firedExpiry = true
+                try {
+                    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                        manager.defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator.vibrate(500)
+                    }
+                } catch (_: Exception) {}
+
+                val quote = QuotesApi.getTimedQuote()
+                currentQuote = quote.text
+                quoteAuthor = quote.author
             }
-        }
-        val breakReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                viewModel.completePomodoro()
-            }
-        }
-        val filter = IntentFilter().apply {
-            addAction(PomodoroForegroundService.ACTION_COMPLETE_WORK)
-            addAction(PomodoroForegroundService.ACTION_COMPLETE_BREAK)
-        }
-        ContextCompat.registerReceiver(context, workReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        ContextCompat.registerReceiver(context, breakReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-        onDispose {
-            try {
-                context.unregisterReceiver(workReceiver)
-                context.unregisterReceiver(breakReceiver)
-            } catch (_: Exception) {}
         }
     }
 
@@ -179,7 +162,9 @@ fun PomodoroScreen(
     val minutes = remainingSeconds / 60
     val seconds = remainingSeconds % 60
     val progress = if (isRunning) {
-        elapsedSeconds.toFloat() / ((activePomodoro?.durationMinutes ?: selectedWorkDuration) * 60)
+        val totalSeconds = (activePomodoro?.durationMinutes ?: selectedWorkDuration) * 60L
+        if (totalSeconds <= 0L) 0f
+        else (elapsedSeconds.toFloat() / totalSeconds).coerceIn(0f, 1f)
     } else 0f
 
     val completedPomodorosToday = todayPomodoros.count { it.type == "WORK" && it.isCompleted }
@@ -196,7 +181,7 @@ fun PomodoroScreen(
             TopAppBar(
                 title = { Text("Pomodoro Timer") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.navigateToHome() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -491,31 +476,12 @@ fun PomodoroScreen(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
                                 val todoTitle = activeTodos.find { it.id == selectedTodoId }?.title ?: ""
-                                val colorInt = android.graphics.Color.rgb(
-                                    (WorkColor.red * 255).toInt(),
-                                    (WorkColor.green * 255).toInt(),
-                                    (WorkColor.blue * 255).toInt()
-                                )
-                                val intent = Intent(context, PomodoroForegroundService::class.java).apply {
-                                    putExtra(PomodoroForegroundService.EXTRA_START_TIME, System.currentTimeMillis())
-                                    putExtra(PomodoroForegroundService.EXTRA_WORK_DURATION, selectedWorkDuration)
-                                    putExtra(PomodoroForegroundService.EXTRA_BREAK_DURATION, selectedBreakDuration)
-                                    putExtra(PomodoroForegroundService.EXTRA_LONG_BREAK_DURATION, 15)
-                                    putExtra(PomodoroForegroundService.EXTRA_TODO_TITLE, todoTitle)
-                                    putExtra(PomodoroForegroundService.EXTRA_IS_BREAK, false)
-                                    putExtra(PomodoroForegroundService.EXTRA_WORK_COLOR, colorInt)
-                                    putExtra(PomodoroForegroundService.EXTRA_SESSION_NUMBER, 0)
-                                }
-                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                    context.startForegroundService(intent)
-                                } else {
-                                    context.startService(intent)
-                                }
-                                
                                 viewModel.startPomodoro(
-                                    if (selectedTodoId > 0) selectedTodoId else null,
-                                    if (selectedCategoryId > 0) selectedCategoryId else null,
-                                    selectedWorkDuration
+                                    todoId = if (selectedTodoId > 0) selectedTodoId else null,
+                                    categoryId = if (selectedCategoryId > 0) selectedCategoryId else null,
+                                    durationMinutes = selectedWorkDuration,
+                                    title = todoTitle,
+                                    breakDurationMinutes = selectedBreakDuration
                                 )
                             },
                             modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -533,11 +499,8 @@ fun PomodoroScreen(
                     item {
                         Button(
                             onClick = {
-                                val intent = Intent(context, PomodoroForegroundService::class.java).apply {
-                                    action = PomodoroForegroundService.ACTION_STOP
-                                }
-                                context.startService(intent)
-                                viewModel.completePomodoro()
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.stopPomodoro()
                             },
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             colors = ButtonDefaults.buttonColors(
@@ -690,32 +653,12 @@ fun PomodoroScreen(
                     val todo = pendingPomodoroTodo ?: return@TextButton
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
-                    val todoTitle = todo.title
-                    val colorInt = android.graphics.Color.rgb(
-                        (WorkColor.red * 255).toInt(),
-                        (WorkColor.green * 255).toInt(),
-                        (WorkColor.blue * 255).toInt()
-                    )
-                    val intent = Intent(context, PomodoroForegroundService::class.java).apply {
-                        putExtra(PomodoroForegroundService.EXTRA_START_TIME, System.currentTimeMillis())
-                        putExtra(PomodoroForegroundService.EXTRA_WORK_DURATION, pendingWorkDuration)
-                        putExtra(PomodoroForegroundService.EXTRA_BREAK_DURATION, selectedBreakDuration)
-                        putExtra(PomodoroForegroundService.EXTRA_LONG_BREAK_DURATION, 15)
-                        putExtra(PomodoroForegroundService.EXTRA_TODO_TITLE, todoTitle)
-                        putExtra(PomodoroForegroundService.EXTRA_IS_BREAK, false)
-                        putExtra(PomodoroForegroundService.EXTRA_WORK_COLOR, colorInt)
-                        putExtra(PomodoroForegroundService.EXTRA_SESSION_NUMBER, 0)
-                    }
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        context.startForegroundService(intent)
-                    } else {
-                        context.startService(intent)
-                    }
-
                     viewModel.startPomodoro(
-                        todo.id,
-                        todo.categoryId,
-                        pendingWorkDuration
+                        todoId = todo.id,
+                        categoryId = todo.categoryId,
+                        durationMinutes = pendingWorkDuration,
+                        title = todo.title,
+                        breakDurationMinutes = selectedBreakDuration
                     )
 
                     showPriorityWarning = false

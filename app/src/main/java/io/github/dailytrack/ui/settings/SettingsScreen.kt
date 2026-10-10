@@ -291,7 +291,7 @@ fun SettingsScreen(navController: NavController) {
                         Column {
                             Text("Soul Track", fontWeight = FontWeight.Medium)
                             Text(
-                                "v0.1.0",
+                                "v${io.github.dailytrack.BuildConfig.VERSION_NAME}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

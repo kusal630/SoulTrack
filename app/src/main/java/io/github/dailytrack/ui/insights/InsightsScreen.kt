@@ -40,6 +40,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.InsightEntity
 import io.github.dailytrack.ui.components.*
+import io.github.dailytrack.ui.theme.RecoveryColor
+import io.github.dailytrack.ui.theme.SleepColor
+import io.github.dailytrack.ui.theme.SocialColor
+import io.github.dailytrack.ui.navigateToHome
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import io.github.dailytrack.ui.viewmodel.WeeklyStats
 
@@ -74,7 +78,7 @@ fun InsightsScreen(
             TopAppBar(
                 title = { Text("Insights") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { navController.navigateToHome() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -89,7 +93,11 @@ fun InsightsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                GrowthScoreCard(growthScore = growthScore, growthResult = growthResult)
+                GrowthScoreCard(
+                    growthScore = growthScore,
+                    growthResult = growthResult,
+                    hasData = weeklyStats.totalTrackedMinutes > 0
+                )
             }
 
             item {
@@ -143,7 +151,8 @@ fun InsightsScreen(
 @Composable
 fun GrowthScoreCard(
     growthScore: Double,
-    growthResult: io.github.dailytrack.engine.GrowthScoreResult?
+    growthResult: io.github.dailytrack.engine.GrowthScoreResult?,
+    hasData: Boolean = true
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -153,13 +162,14 @@ fun GrowthScoreCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val scoreColor = when {
+                !hasData -> FreeGray
                 growthScore >= 70 -> ProductiveGreen
                 growthScore >= 40 -> ExerciseOrange
                 else -> WastedRed
             }
 
             ProgressRing(
-                progress = (growthScore / 100f).toFloat(),
+                progress = (growthScore / 100.0).coerceIn(0.0, 1.0).toFloat(),
                 size = 100.dp,
                 strokeWidth = 10.dp,
                 color = scoreColor,
@@ -283,7 +293,15 @@ fun TodoProgressCard(activeCount: Int, completedCount: Int) {
 
 @Composable
 fun TimeDistributionCard(weeklyStats: WeeklyStats) {
-    val total = (weeklyStats.totalProductiveMinutes + weeklyStats.totalWastedMinutes + weeklyStats.totalFreeMinutes).toFloat()
+    val slices = listOf(
+        PieChartSlice(weeklyStats.totalProductiveMinutes.toFloat(), ProductiveGreen, "Productive"),
+        PieChartSlice(weeklyStats.totalSleepMinutes.toFloat(), SleepColor, "Sleep"),
+        PieChartSlice(weeklyStats.totalWastedMinutes.toFloat(), WastedRed, "Wasted"),
+        PieChartSlice(weeklyStats.totalSocialMinutes.toFloat(), SocialColor, "Social"),
+        PieChartSlice(weeklyStats.totalRecoveryMinutes.toFloat(), RecoveryColor, "Recovery"),
+        PieChartSlice(weeklyStats.totalFreeMinutes.toFloat(), FreeGray, "Free"),
+    ).filter { it.value > 0f }
+    val total = weeklyStats.totalTrackedMinutes.toFloat()
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -294,17 +312,13 @@ fun TimeDistributionCard(weeklyStats: WeeklyStats) {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (total > 0) {
+            if (total > 0 && slices.isNotEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     PieChart(
-                        slices = listOf(
-                            PieChartSlice(weeklyStats.totalProductiveMinutes.toFloat(), ProductiveGreen, "Productive"),
-                            PieChartSlice(weeklyStats.totalWastedMinutes.toFloat(), WastedRed, "Wasted"),
-                            PieChartSlice(weeklyStats.totalFreeMinutes.toFloat(), FreeGray, "Free"),
-                        ),
+                        slices = slices,
                         size = 120.dp,
                         strokeWidth = 16.dp,
                         centerContent = {
@@ -324,11 +338,7 @@ fun TimeDistributionCard(weeklyStats: WeeklyStats) {
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     PieChartLegend(
-                        slices = listOf(
-                            PieChartSlice(weeklyStats.totalProductiveMinutes.toFloat(), ProductiveGreen, "Productive"),
-                            PieChartSlice(weeklyStats.totalWastedMinutes.toFloat(), WastedRed, "Wasted"),
-                            PieChartSlice(weeklyStats.totalFreeMinutes.toFloat(), FreeGray, "Free"),
-                        ),
+                        slices = slices,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -654,7 +664,7 @@ fun InsightDetailCard(insight: InsightEntity, onDismiss: () -> Unit) {
                     )
                 }
             }
-            IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
             }
         }

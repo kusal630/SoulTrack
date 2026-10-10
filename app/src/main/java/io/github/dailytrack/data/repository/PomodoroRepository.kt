@@ -27,6 +27,9 @@ class PomodoroRepository(private val pomodoroDao: PomodoroSessionDao) {
     fun getPomodorosForTodo(todoId: Long): Flow<List<PomodoroSessionEntity>> = pomodoroDao.getPomodorosForTodo(todoId)
 
     suspend fun getPomodoroById(id: Long): PomodoroSessionEntity? = pomodoroDao.getPomodoroById(id)
+    fun getActivePomodoro(): Flow<PomodoroSessionEntity?> = pomodoroDao.getActivePomodoro()
+    suspend fun getActivePomodoroSync(): PomodoroSessionEntity? = pomodoroDao.getActivePomodoroSync()
+    suspend fun completeActiveSession(endTime: Long) = pomodoroDao.completeActiveSession(endTime)
     suspend fun insert(pomodoro: PomodoroSessionEntity): Long = pomodoroDao.insert(pomodoro)
     suspend fun update(pomodoro: PomodoroSessionEntity) = pomodoroDao.update(pomodoro)
     suspend fun delete(pomodoro: PomodoroSessionEntity) = pomodoroDao.delete(pomodoro)

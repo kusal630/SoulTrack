@@ -7,9 +7,9 @@ AutoUpdateMode: Version v%v
 UpdateCheckMode: Tags
 
 Builds:
-  - versionName: '0.1.0'
-    versionCode: 1
-    commit: v0.1.0
+  - versionName: '2.1.0'
+    versionCode: 8
+    commit: v2.1.0
     subdir: app
     gradle:
       - fdroid
