@@ -62,6 +62,15 @@ interface SessionDao {
     @Query("UPDATE sessions SET isActive = 0, endTime = :now, updatedAt = :now WHERE isActive = 1")
     suspend fun stopActiveSession(now: Long = System.currentTimeMillis())
 
+    @Query("UPDATE sessions SET isActive = 0, endTime = :now, updatedAt = :now WHERE id = :sessionId AND isActive = 1")
+    suspend fun stopSessionById(sessionId: Long, now: Long = System.currentTimeMillis())
+
+    @Query("SELECT * FROM sessions WHERE endTime IS NOT NULL AND endTime >= :start ORDER BY startTime DESC")
+    suspend fun getCompletedSessionsSince(start: Long): List<SessionEntity>
+
+    @Query("SELECT * FROM sessions WHERE startTime < :end AND (endTime IS NULL OR endTime > :start) ORDER BY startTime")
+    suspend fun getSessionsBetweenSync(start: Long, end: Long): List<SessionEntity>
+
     @Query("SELECT * FROM sessions WHERE categoryId = :categoryId AND startTime >= :start AND startTime < :end ORDER BY startTime")
     fun getSessionsByCategoryForDay(categoryId: Long, start: Long, end: Long): Flow<List<SessionEntity>>
 

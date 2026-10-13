@@ -45,6 +45,16 @@ class QuoteWidgetProvider : AppWidgetProvider() {
             }
             context.sendBroadcast(intent)
         }
+
+        /** Pushes a quote straight into the widget (used on every app launch). */
+        fun showQuote(context: Context, text: String, author: String) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putString("quote_text", text)
+                .putString("quote_author", author)
+                .putLong("last_refresh_time", System.currentTimeMillis())
+                .apply()
+            updateWidgets(context)
+        }
     }
 
     override fun onUpdate(

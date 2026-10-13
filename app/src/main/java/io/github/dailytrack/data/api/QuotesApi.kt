@@ -27,13 +27,28 @@ import java.net.URL
 
 data class Quote(
     val text: String,
-    val author: String
+    val author: String,
+    val best: Boolean = false
 )
 
 object QuotesApi {
     private const val PREFS_NAME = "soultrack_quotes_prefs"
     private const val KEY_ONLINE_QUOTES = "online_quotes"
     private const val KEY_API_ENABLED = "api_enabled"
+    private const val KEY_LAST_FETCH = "last_online_fetch"
+    private const val KEY_SHOWN_QUOTES = "shown_quotes"
+    private const val KEY_DISPLAY_QUOTE = "display_quote"
+    private const val KEY_DISPLAY_AUTHOR = "display_author"
+    private const val KEY_DISPLAY_TOKEN = "display_token"
+
+    private const val FETCH_INTERVAL_MS = 3L * 24 * 60 * 60 * 1000L
+    private const val MIN_UNSHOWN_POOL = 20
+    private const val MAX_SHOWN_MEMORY = 200
+    private const val SHOWN_TTL_MS = 7L * 24 * 60 * 60 * 1000L
+
+    /** Identifies this app process so quotes rotate on every reload. */
+    private val processToken: String = java.util.UUID.randomUUID().toString()
+    private val bestQueue: ArrayDeque<Quote> = ArrayDeque()
 
     private val offlineQuotes = listOf(
         // Motivation (15) - deduplicated
@@ -306,7 +321,106 @@ object QuotesApi {
         Quote("I am not what happened to me. I am what I choose to become.", "Carl Jung"),
         Quote("If we don't change, we don't grow. If we don't grow, we aren't really living.", "Gail Sheehy"),
         Quote("You can't build a reputation on what you're going to do.", "Henry Ford"),
-        Quote("The measure of a man is what he does with power.", "Plato")
+        Quote("The measure of a man is what he does with power.", "Plato"),
+
+        // Bhagavad Gita (15)
+        Quote("You have a right to your actions, but never to your actions' fruits.", "Bhagavad Gita", best = true),
+        Quote("The mind is restless and difficult to restrain, but it is subdued by practice.", "Bhagavad Gita", best = true),
+        Quote("When meditation is mastered, the mind is unwavering like the flame of a lamp in a windless place.", "Bhagavad Gita", best = true),
+        Quote("A person can rise through the efforts of their own mind, or draw themselves down in the same manner.", "Bhagavad Gita", best = true),
+        Quote("No one who does good work will ever come to a bad end.", "Bhagavad Gita", best = true),
+        Quote("The soul is neither born, nor does it ever die.", "Bhagavad Gita", best = true),
+        Quote("As a person puts on new garments, giving up old ones, the soul accepts new bodies.", "Bhagavad Gita", best = true),
+        Quote("Set thy heart upon thy work, but never on its reward.", "Bhagavad Gita", best = true),
+        Quote("Man is made by his belief. As he believes, so he is.", "Bhagavad Gita", best = true),
+        Quote("There is neither this world, nor the world beyond, nor happiness for the one who doubts.", "Bhagavad Gita", best = true),
+        Quote("Better is one's own duty, though imperfectly performed, than the duty of another well performed.", "Bhagavad Gita", best = true),
+        Quote("Calmness, gentleness, silence, self-restraint and purity: these are the disciplines of the mind.", "Bhagavad Gita", best = true),
+        Quote("For one who has conquered the mind, the mind is the best of friends; for one who has failed, it remains the greatest enemy.", "Bhagavad Gita", best = true),
+        Quote("Whatever happened, happened for the good. Whatever is happening, is happening for the good.", "Bhagavad Gita", best = true),
+        Quote("The wise see knowledge and action as one.", "Bhagavad Gita", best = true),
+
+        // Stoics & Classics (15)
+        Quote("The impediment to action advances action. What stands in the way becomes the way.", "Marcus Aurelius", best = true),
+        Quote("Waste no more time arguing about what a good man should be. Be one.", "Marcus Aurelius", best = true),
+        Quote("The happiness of your life depends upon the quality of your thoughts.", "Marcus Aurelius", best = true),
+        Quote("The soul becomes dyed with the color of its thoughts.", "Marcus Aurelius", best = true),
+        Quote("If it is not right, do not do it. If it is not true, do not say it.", "Marcus Aurelius", best = true),
+        Quote("It is not that we have a short time to live, but that we waste a great deal of it.", "Seneca", best = true),
+        Quote("Luck is what happens when preparation meets opportunity.", "Seneca", best = true),
+        Quote("We suffer more often in imagination than in reality.", "Seneca", best = true),
+        Quote("Begin at once to live, and count each separate day as a separate life.", "Seneca", best = true),
+        Quote("Difficulties strengthen the mind, as labor does the body.", "Seneca", best = true),
+        Quote("It's not what happens to you, but how you react to it that matters.", "Epictetus", best = true),
+        Quote("He is a wise man who does not grieve for the things which he has not, but rejoices for those which he has.", "Epictetus", best = true),
+        Quote("No man is free who is not master of himself.", "Epictetus", best = true),
+        Quote("First say to yourself what you would be, and then do what you have to do.", "Epictetus", best = true),
+        Quote("The greater the difficulty, the more glory in surmounting it.", "Epicurus", best = true),
+
+        // World Books (15)
+        Quote("The two most powerful warriors are patience and time.", "Leo Tolstoy", best = true),
+        Quote("Taking a new step, uttering a new word, is what people fear most.", "Fyodor Dostoevsky", best = true),
+        Quote("You can't cross the sea merely by standing and staring at the water.", "Rabindranath Tagore", best = true),
+        Quote("Work is love made visible.", "Kahlil Gibran", best = true),
+        Quote("Between stimulus and response there is a space. In that space is our power to choose.", "Viktor Frankl", best = true),
+        Quote("When we are no longer able to change a situation, we are challenged to change ourselves.", "Viktor Frankl", best = true),
+        Quote("The only way out is through.", "Robert Frost", best = true),
+        Quote("All we have to decide is what to do with the time that is given us.", "J.R.R. Tolkien", best = true),
+        Quote("Not all those who wander are lost.", "J.R.R. Tolkien", best = true),
+        Quote("It is our choices that show what we truly are, far more than our abilities.", "J.K. Rowling", best = true),
+        Quote("Happiness can be found even in the darkest of times, if one only remembers to turn on the light.", "J.K. Rowling", best = true),
+        Quote("We are all in the gutter, but some of us are looking at the stars.", "Oscar Wilde", best = true),
+        Quote("Be yourself; everyone else is already taken.", "Oscar Wilde", best = true),
+        Quote("In the midst of chaos, there is also opportunity.", "Sun Tzu", best = true),
+        Quote("I am no bird; and no net ensnares me.", "Charlotte Brontë", best = true),
+
+        // Bhagavad Gita - more of the most quoted verses
+        Quote("One who sees inaction in action, and action in inaction, is intelligent among men.", "Bhagavad Gita", best = true),
+        Quote("Change is the law of the universe. What you call death is but a change of body.", "Bhagavad Gita", best = true),
+        Quote("The mind acts like an enemy for those who do not control it.", "Bhagavad Gita", best = true),
+        Quote("Steadiness in yoga is excellence in action.", "Bhagavad Gita", best = true),
+        Quote("Heat and cold, pleasure and pain come and go. Endure them patiently.", "Bhagavad Gita", best = true),
+        Quote("Whatever you do, do it as an offering, and without attachment to the result.", "Bhagavad Gita", best = true),
+        Quote("The wise see the same self in a learned Brahmin, a cow, an elephant, a dog and an outcast.", "Bhagavad Gita", best = true),
+        Quote("Fearlessness, purity, self-control, charity, modesty, austerity: these are the qualities of the born divine.", "Bhagavad Gita", best = true),
+        Quote("Among thousands, only one strives for perfection; and of those, few know Me.", "Bhagavad Gita", best = true),
+        Quote("Ponder the sublime wisdom of the Gita every day; it is the greatest secret of all.", "Bhagavad Gita", best = true),
+        Quote("The soul wears the body as a garment, and casts it off when it is worn out.", "Bhagavad Gita", best = true),
+        Quote("He who sees Me in everything and everything in Me, never turns away from Me.", "Bhagavad Gita", best = true),
+
+        // Best lines from the world's books
+        Quote("The only thing we have to fear is fear itself.", "Franklin D. Roosevelt", best = true),
+        Quote("In the middle of difficulty lies opportunity.", "Albert Einstein", best = true),
+        Quote("Imagination is more important than knowledge.", "Albert Einstein", best = true),
+        Quote("I have no special talents. I am only passionately curious.", "Albert Einstein", best = true),
+        Quote("Try not to become a man of success, but rather a man of value.", "Albert Einstein", best = true),
+        Quote("The unexamined life is not worth living.", "Socrates", best = true),
+        Quote("The only true wisdom is in knowing you know nothing.", "Socrates", best = true),
+        Quote("We are what we repeatedly do. Excellence, then, is not an act but a habit.", "Aristotle", best = true),
+        Quote("Knowing yourself is the beginning of all wisdom.", "Aristotle", best = true),
+        Quote("He who has a why to live can bear almost any how.", "Friedrich Nietzsche", best = true),
+        Quote("That which does not kill us makes us stronger.", "Friedrich Nietzsche", best = true),
+        Quote("What you think, you become.", "Buddha", best = true),
+        Quote("Peace comes from within. Do not seek it without.", "Buddha", best = true),
+        Quote("Happiness is not something ready made. It comes from your own actions.", "Dalai Lama", best = true),
+        Quote("Be kind whenever possible. It is always possible.", "Dalai Lama", best = true),
+        Quote("The best time to plant a tree was 20 years ago. The second best time is now.", "Chinese Proverb", best = true),
+        Quote("An eye for an eye will only make the whole world blind.", "Mahatma Gandhi", best = true),
+        Quote("In a gentle way, you can shake the world.", "Mahatma Gandhi", best = true),
+        Quote("Arise, awake, and stop not till the goal is reached.", "Swami Vivekananda", best = true),
+        Quote("We are what our thoughts have made us; so take care of what you think.", "Swami Vivekananda", best = true),
+        Quote("The wound is the place where the Light enters you.", "Rumi", best = true),
+        Quote("What you seek is seeking you.", "Rumi", best = true),
+        Quote("Yesterday I was clever, so I wanted to change the world. Today I am wise, so I am changing myself.", "Rumi", best = true),
+        Quote("The secret of getting ahead is getting started.", "Mark Twain", best = true),
+        Quote("Well done is better than well said.", "Benjamin Franklin", best = true),
+        Quote("You miss 100% of the shots you don't take.", "Wayne Gretzky", best = true),
+        Quote("Whether you think you can or you think you can't, you're right.", "Henry Ford", best = true),
+        Quote("Simplicity is the ultimate sophistication.", "Leonardo da Vinci", best = true),
+        Quote("Learning never exhausts the mind.", "Leonardo da Vinci", best = true),
+        Quote("Your time is limited, so don't waste it living someone else's life.", "Steve Jobs", best = true),
+        Quote("Discipline equals freedom.", "Jocko Willink", best = true),
+        Quote("How we spend our days is, of course, how we spend our lives.", "Annie Dillard", best = true)
     )
 
     private var onlineQuotes: List<Quote> = emptyList()
@@ -332,12 +446,12 @@ object QuotesApi {
     }
 
     private fun loadShownQuotes() {
-        val json = prefs?.getString("shown_quotes", null) ?: return
+        val json = prefs?.getString(KEY_SHOWN_QUOTES, null) ?: return
         try {
             val obj = JSONObject(json)
             val timestamp = obj.optLong("timestamp", 0L)
             val now = System.currentTimeMillis()
-            if (now - timestamp < 24 * 60 * 60 * 1000L) {
+            if (now - timestamp < SHOWN_TTL_MS) {
                 val arr = obj.optJSONArray("quotes") ?: return
                 shownQuotes.clear()
                 for (i in 0 until arr.length()) {
@@ -345,11 +459,23 @@ object QuotesApi {
                 }
             } else {
                 shownQuotes.clear()
-                prefs?.edit()?.remove("shown_quotes")?.apply()
+                prefs?.edit()?.remove(KEY_SHOWN_QUOTES)?.apply()
             }
         } catch (_: Exception) {
             shownQuotes.clear()
         }
+    }
+
+    private fun rememberShown(text: String) {
+        shownQuotes.add(text)
+        while (shownQuotes.size > MAX_SHOWN_MEMORY) {
+            val oldest = shownQuotes.iterator()
+            if (oldest.hasNext()) {
+                oldest.next()
+                oldest.remove()
+            } else break
+        }
+        saveShownQuotes()
     }
 
     private fun saveShownQuotes() {
@@ -400,11 +526,7 @@ object QuotesApi {
     suspend fun getRandomQuote(): Quote {
         if (quoteQueue.isEmpty()) refillQueue()
         val quote = quoteQueue.removeFirstOrNull() ?: offlineQuotes.random()
-        shownQuotes.add(quote.text)
-        if (shownQuotes.size > 50) {
-            shownQuotes.clear()
-        }
-        saveShownQuotes()
+        rememberShown(quote.text)
         return quote
     }
 
@@ -421,37 +543,112 @@ object QuotesApi {
             categoryKeywords.any { kw -> q.text.contains(kw, ignoreCase = true) }
         }
         val filtered = all.filter { it.text !in shownQuotes }
-        val quote = if (filtered.isNotEmpty()) getWeightedRandom(filtered) else getWeightedRandom(all)
-        shownQuotes.add(quote.text)
-        saveShownQuotes()
+        val quote = if (filtered.isNotEmpty()) getWeightedRandom(filtered) else getRandomQuote()
+        rememberShown(quote.text)
         return quote
     }
 
     suspend fun getTimedQuote(): Quote {
         val timeOfDay = getTimeOfDay()
         val timeKeywords = when (timeOfDay) {
-            "morning" -> listOf("morning", "day", "begin", "start", "wake", "dawn")
-            "afternoon" -> listOf("work", "focus", "productivity", "progress", "momentum")
-            "evening" -> listOf("rest", "reflect", "peace", "calm", "gratitude", "sleep")
+            "morning" -> listOf(
+                "morning", "day", "begin", "start", "wake", "dawn", "rise", "today",
+                "new", "opportunity", "action", "do", "go", "energy", "courage"
+            )
+            "afternoon" -> listOf(
+                "work", "focus", "productivity", "progress", "momentum", "discipline",
+                "persist", "continue", "effort", "strength", "courage", "action", "do"
+            )
+            "evening" -> listOf(
+                "rest", "reflect", "peace", "calm", "gratitude", "sleep", "soul",
+                "mind", "wisdom", "content", "quiet", "still", "thank"
+            )
             else -> emptyList()
         }
         val all = (offlineQuotes + onlineQuotes).filter { q ->
             timeKeywords.any { kw -> q.text.contains(kw, ignoreCase = true) }
         }
         val filtered = all.filter { it.text !in shownQuotes }
-        val quote = if (filtered.isNotEmpty()) getWeightedRandom(filtered) else getRandomQuote()
-        shownQuotes.add(quote.text)
-        saveShownQuotes()
+        val quote = when {
+            filtered.isNotEmpty() -> getWeightedRandom(filtered)
+            all.isNotEmpty() -> getWeightedRandom(all)
+            else -> getRandomQuote()
+        }
+        rememberShown(quote.text)
         return quote
     }
 
     fun isApiEnabled(): Boolean {
-        return prefs?.getBoolean(KEY_API_ENABLED, false) ?: false
+        return prefs?.getBoolean(KEY_API_ENABLED, true) ?: true
     }
 
     fun setApiEnabled(enabled: Boolean) {
         prefs?.edit()?.putBoolean(KEY_API_ENABLED, enabled)?.apply()
     }
+
+    fun getLastFetchTime(): Long {
+        return prefs?.getLong(KEY_LAST_FETCH, 0L) ?: 0L
+    }
+
+    fun getUnshownPoolSize(): Int {
+        return (offlineQuotes + onlineQuotes).count { it.text !in shownQuotes }
+    }
+
+    fun shouldRefresh(now: Long = System.currentTimeMillis()): Boolean {
+        if (!isApiEnabled()) return false
+        val last = getLastFetchTime()
+        if (last <= 0L) return true
+        if (now - last >= FETCH_INTERVAL_MS) return true
+        return getUnshownPoolSize() < MIN_UNSHOWN_POOL
+    }
+
+    suspend fun maybeRefreshQuotes(force: Boolean = false): List<Quote> {
+        if (!force && !shouldRefresh()) return onlineQuotes
+        if (!isApiEnabled() && !force) return onlineQuotes
+        val fetched = fetchOnlineQuotes()
+        if (fetched.isNotEmpty()) {
+            prefs?.edit()?.putLong(KEY_LAST_FETCH, System.currentTimeMillis())?.apply()
+            bestQueue.clear()
+        }
+        return fetched
+    }
+
+    /** Number of flagship quotes (Bhagavad Gita, stoics, world books). */
+    fun getBestQuotesCount(): Int =
+        offlineQuotes.count { it.best } + onlineQuotes.count { it.best }
+
+    private fun refillBestQueue() {
+        val best = (offlineQuotes + onlineQuotes).filter { it.best }
+        val fresh = best.filter { it.text !in shownQuotes }.shuffled()
+        bestQueue.clear()
+        bestQueue.addAll(if (fresh.isNotEmpty()) fresh else best.shuffled())
+    }
+
+    /**
+     * Rotates in a fresh flagship quote. Called once per app launch so every
+     * reload surfaces a new "best of the world" line instead of yesterday's.
+     */
+    suspend fun rotateDisplayQuote(): Quote {
+        if (bestQueue.isEmpty()) refillBestQueue()
+        val quote = bestQueue.removeFirstOrNull() ?: getRandomQuote()
+        rememberShown(quote.text)
+        prefs?.edit()
+            ?.putString(KEY_DISPLAY_QUOTE, quote.text)
+            ?.putString(KEY_DISPLAY_AUTHOR, quote.author)
+            ?.putString(KEY_DISPLAY_TOKEN, processToken)
+            ?.apply()
+        return quote
+    }
+
+    fun getDisplayQuote(): Quote? {
+        val text = prefs?.getString(KEY_DISPLAY_QUOTE, null) ?: return null
+        if (text.isBlank()) return null
+        return Quote(text, prefs?.getString(KEY_DISPLAY_AUTHOR, "") ?: "")
+    }
+
+    /** True when this process has already rotated the quote for this launch. */
+    fun hasFreshDisplayQuote(): Boolean =
+        prefs?.getString(KEY_DISPLAY_TOKEN, null) == processToken
 
     suspend fun fetchOnlineQuotes(): List<Quote> {
         return withContext(Dispatchers.IO) {

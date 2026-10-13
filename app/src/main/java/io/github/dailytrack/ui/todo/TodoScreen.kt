@@ -20,11 +20,12 @@ package io.github.dailytrack.ui.todo
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,7 +39,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SubtaskEntity
 import io.github.dailytrack.data.db.entity.TodoEntity
+import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.ui.components.*
+import io.github.dailytrack.ui.components.dayProgressFor
+import io.github.dailytrack.ui.theme.ExerciseColor
+import io.github.dailytrack.ui.theme.ProductiveColor
 import io.github.dailytrack.ui.navigateToHome
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import java.time.Instant
@@ -71,6 +76,12 @@ fun TodoScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var showClearCompletedDialog by remember { mutableStateOf(false) }
 
+    val today = java.time.LocalDate.now()
+    val allTodos = remember(activeTodos, completedTodos) { activeTodos + completedTodos }
+    val dayProgressValue = remember(activeTodos, completedTodos) {
+        dayProgressFor(today, allTodos)
+    }
+
     val filteredTodos = remember(activeTodos, activeFilter, sortOrder) {
         val filtered = when (activeFilter) {
             TodoFilter.ALL -> activeTodos
@@ -90,17 +101,11 @@ fun TodoScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Todo List") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateToHome() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    Box {
+    ScreenList(
+        title = "Tasks",
+        onBack = { navController.navigateToHome() },
+        actions = {
+            Box {
                         IconButton(onClick = { showSortMenu = true }) {
                             Icon(Icons.Default.Sort, contentDescription = "Sort")
                         }
@@ -144,27 +149,19 @@ fun TodoScreen(
                                 } else null
                             )
                         }
-                    }
-                    IconButton(onClick = { showAddDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Todo")
-                    }
-                }
-            )
+            }
+            IconButton(onClick = { showAddDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Add Todo")
+            }
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+    ) {
             item {
                 TodoProgressOverview(
                     activeCount = activeTodoCount,
                     completedCount = completedTodoCount,
                     highPriorityCount = highPriorityCount,
-                    overdueCount = overdueCount
+                    overdueCount = overdueCount,
+                    dayProgress = dayProgressValue
                 )
             }
 
@@ -177,6 +174,7 @@ fun TodoScreen(
 
             if (filteredTodos.isNotEmpty()) {
                 items(filteredTodos, key = { it.id }) { todo ->
+                    SwipeToCompleteRow(onComplete = { viewModel.completeTodo(todo.id) }) {
                     TodoItemCard(
                         todo = todo,
                         categories = categories,
@@ -196,52 +194,37 @@ fun TodoScreen(
                         onEdit = { viewModel.updateTodo(it) },
                         viewModel = viewModel
                     )
-                }
-            } else if (activeTodos.isEmpty()) {
-                item { /* empty state below */ }
-            } else {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        )
-                    ) {
-                        Text(
-                            "No tasks match this filter",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
+                }
+            } else if (activeTodos.isNotEmpty()) {
+                item {
+                    EmptyState(
+                        title = "No tasks match this filter",
+                        message = "Clear the filter to see every task again.",
+                        icon = Icons.Default.FilterList,
+                        actionLabel = "Clear filter",
+                        onAction = { activeFilter = TodoFilter.ALL }
+                    )
                 }
             }
 
             if (completedTodos.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Completed (${completedTodos.size})",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
-                        )
-                        TextButton(
-                            onClick = { showClearCompletedDialog = true },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Clear All")
+                    SectionTitle(
+                        title = "Completed (${completedTodos.size})",
+                        trailing = {
+                            TextButton(
+                                onClick = { showClearCompletedDialog = true },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Clear All")
+                            }
                         }
-                    }
+                    )
                 }
                 items(completedTodos.take(15), key = { it.id }) { todo ->
                     CompletedTodoItemCard(todo = todo, categories = categories)
@@ -250,33 +233,23 @@ fun TodoScreen(
 
             if (activeTodos.isEmpty() && completedTodos.isEmpty()) {
                 item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("No tasks yet", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Add your first todo to get started",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    EmptyState(
+                        title = "No tasks yet",
+                        message = "Assigning a task starts the day ring - the inner arc fills as you finish each one.",
+                        icon = Icons.Default.CheckCircle,
+                        actionLabel = "Add task",
+                        onAction = { showAddDialog = true }
+                    )
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-        }
+            item {
+                PrimaryCta(
+                    text = "Add task",
+                    icon = Icons.Default.Add,
+                    onClick = { showAddDialog = true }
+                )
+            }
     }
 
     if (showClearCompletedDialog) {
@@ -327,7 +300,7 @@ fun TodoScreen(
 
         AlertDialog(
             onDismissRequest = { showPriorityWarning = false; pendingPomodoroTodo = null },
-            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFF57C00)) },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = ExerciseColor) },
             title = { Text("Priority Warning") },
             text = {
                 Column {
@@ -343,9 +316,9 @@ fun TodoScreen(
                         ) {
                             Surface(
                                 color = when (task.priority) {
-                                    3 -> Color(0xFFE94560).copy(alpha = 0.15f)
-                                    2 -> Color(0xFFF57C00).copy(alpha = 0.15f)
-                                    else -> Color(0xFF4CAF50).copy(alpha = 0.15f)
+                                    3 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                    2 -> ExerciseColor.copy(alpha = 0.15f)
+                                    else -> ProductiveColor.copy(alpha = 0.15f)
                                 },
                                 shape = MaterialTheme.shapes.extraSmall
                             ) {
@@ -358,9 +331,9 @@ fun TodoScreen(
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = when (task.priority) {
-                                        3 -> Color(0xFFE94560)
-                                        2 -> Color(0xFFF57C00)
-                                        else -> Color(0xFF4CAF50)
+                                        3 -> MaterialTheme.colorScheme.primary
+                                        2 -> ExerciseColor
+                                        else -> ProductiveColor
                                     },
                                     fontWeight = FontWeight.Bold
                                 )
@@ -415,46 +388,98 @@ fun TodoScreen(
     }
 }
 
+/**
+ * Swipe left to finish a task. The row springs back - the task is completed,
+ * not removed, so the ring jumps and the card lands in the completed section.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeToCompleteRow(
+    onComplete: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) onComplete()
+            false
+        },
+        positionalThreshold = { totalDistance -> totalDistance * 0.35f }
+    )
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                        MaterialTheme.shapes.large
+                    )
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Done",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    ) {
+        content()
+    }
+}
+
 @Composable
 fun TodoProgressOverview(
     activeCount: Int,
     completedCount: Int,
     highPriorityCount: Int,
-    overdueCount: Int
+    overdueCount: Int,
+    dayProgress: Float = 0f
 ) {
     val total = activeCount + completedCount
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val status = when {
+        total == 0 -> DayStatus.NO_TASKS
+        dayProgress >= 1f -> DayStatus.DONE
+        else -> DayStatus.IN_PROGRESS
+    }
+    SurfaceCard {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PieChart(
-                slices = listOf(
-                    PieChartSlice(activeCount.toFloat(), Color(0xFFF57C00), "Pending"),
-                    PieChartSlice(completedCount.toFloat(), Color(0xFF2E7D32), "Done"),
-                ),
-                size = 80.dp,
-                strokeWidth = 12.dp,
-                centerContent = {
-                    Text(
-                        text = if (total > 0) "${(completedCount * 100 / total)}%" else "0%",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            MiniSoulRing(
+                progress = dayProgress,
+                status = status,
+                isToday = true,
+                modifier = Modifier.size(80.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Task Progress",
+                    "Today's ring",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "$completedCount done / $activeCount pending",
+                    if (total == 0) {
+                        "Assign tasks to start the day ring"
+                    } else {
+                        "$completedCount done / $activeCount pending · ${status.label}"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -462,14 +487,14 @@ fun TodoProgressOverview(
                     Text(
                         "$highPriorityCount high priority",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFE94560)
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
                 if (overdueCount > 0) {
                     Text(
                         "$overdueCount overdue",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFC62828)
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -490,6 +515,7 @@ fun TodoFilterChips(
             FilterChip(
                 selected = activeFilter == filter,
                 onClick = { onFilterChange(filter) },
+                modifier = Modifier.height(48.dp),
                 label = {
                     Text(
                         when (filter) {
@@ -499,12 +525,27 @@ fun TodoFilterChips(
                             TodoFilter.LOW -> "Low"
                             TodoFilter.OVERDUE -> "Overdue"
                         },
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (activeFilter == filter) FontWeight.SemiBold else FontWeight.Medium
                     )
                 },
                 leadingIcon = if (activeFilter == filter) {
                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null
+                } else null,
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    selectedLabelColor = MaterialTheme.colorScheme.primary,
+                    selectedLeadingIconColor = MaterialTheme.colorScheme.primary
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    borderColor = MaterialTheme.colorScheme.outlineVariant,
+                    selectedBorderColor = MaterialTheme.colorScheme.primary,
+                    enabled = true,
+                    selected = activeFilter == filter
+                ),
+                shape = RoundedCornerShape(50)
             )
         }
     }
@@ -532,9 +573,9 @@ fun TodoItemCard(
     var showEditDialog by remember { mutableStateOf(false) }
 
     val priorityColor = when (todo.priority) {
-        3 -> Color(0xFFE94560)
-        2 -> Color(0xFFF57C00)
-        1 -> Color(0xFF4CAF50)
+        3 -> MaterialTheme.colorScheme.primary
+        2 -> ExerciseColor
+        1 -> ProductiveColor
         else -> Color.Transparent
     }
     val priorityLabel = when (todo.priority) {
@@ -544,33 +585,46 @@ fun TodoItemCard(
         else -> ""
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Checkbox(
-                    checked = false,
-                    onCheckedChange = { onComplete() }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = todo.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium
-                        )
-                        if (priorityLabel.isNotBlank()) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                color = priorityColor.copy(alpha = 0.15f),
-                                shape = MaterialTheme.shapes.extraSmall
+    SurfaceCard(contentPadding = PaddingValues(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = false,
+                onCheckedChange = { onComplete() }
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = todo.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (priorityLabel.isNotBlank()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = priorityColor.copy(alpha = 0.15f),
+                            shape = MaterialTheme.shapes.extraSmall
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Icon(
+                                    imageVector = when (todo.priority) {
+                                        3 -> Icons.Default.PriorityHigh
+                                        2 -> Icons.Default.Remove
+                                        else -> Icons.Default.LowPriority
+                                    },
+                                    contentDescription = null,
+                                    tint = priorityColor,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = priorityLabel,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = priorityColor,
                                     fontWeight = FontWeight.Bold
@@ -578,72 +632,80 @@ fun TodoItemCard(
                             }
                         }
                     }
-                    if (categoryName.isNotBlank() || deadlineStr != null) {
-                        Row {
-                            if (categoryName.isNotBlank()) {
-                                Text(
-                                    text = categoryName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            if (deadlineStr != null) {
-                                if (categoryName.isNotBlank()) Text(" · ", style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    text = "Due: $deadlineStr",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (isOverdue) Color(0xFFC62828) else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                }
+                if (categoryName.isNotBlank() || deadlineStr != null) {
+                    Row {
+                        if (categoryName.isNotBlank()) {
+                            Text(
+                                text = categoryName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        if (deadlineStr != null) {
+                            if (categoryName.isNotBlank()) Text(" · ", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                text = "Due: $deadlineStr",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isOverdue) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
-                    if (subtasks.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        LinearProgressIndicator(
-                            progress = { completedSubtasks.toFloat() / subtasks.size },
-                            modifier = Modifier.fillMaxWidth().height(4.dp),
-                            color = Color(0xFF2E7D32),
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                        Text(
-                            "$completedSubtasks/${subtasks.size} subtasks",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (todo.estimatedMinutes > 0) {
-                        Text(
-                            text = "Est: ${todo.estimatedMinutes}min | Done: ${todo.actualMinutes}min | Pomodoros: ${todo.pomodoroCount}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
                 if (subtasks.isNotEmpty()) {
-                    IconButton(onClick = { showSubtasks = !showSubtasks }, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            if (showSubtasks) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = "Toggle subtasks",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { completedSubtasks.toFloat() / subtasks.size },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = ProductiveColor,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                    Text(
+                        "$completedSubtasks/${subtasks.size} subtasks",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                IconButton(onClick = onStartPomodoro, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.Timer, contentDescription = "Start Pomodoro", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                }
-                IconButton(onClick = { showEditDialog = true }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                if (todo.estimatedMinutes > 0) {
+                    Text(
+                        text = "Est: ${todo.estimatedMinutes}min | Done: ${todo.actualMinutes}min | Pomodoros: ${todo.pomodoroCount}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
+        }
+
+        Hairline()
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            if (subtasks.isNotEmpty()) {
+                IconButton(onClick = { showSubtasks = !showSubtasks }, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        if (showSubtasks) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = "Toggle subtasks",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            IconButton(onClick = onStartPomodoro, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.Timer, contentDescription = "Start Pomodoro", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+            IconButton(onClick = { showEditDialog = true }, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+            }
+        }
 
             AnimatedVisibility(visible = showSubtasks && subtasks.isNotEmpty()) {
                 Column {
@@ -691,15 +753,14 @@ fun TodoItemCard(
                                     newSubtask = ""
                                 }
                             },
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = "Add subtask", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Add, contentDescription = "Add subtask", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
             }
         }
-    }
 
     if (showEditDialog) {
         EditTodoDialog(
@@ -721,19 +782,15 @@ fun CompletedTodoItemCard(
 ) {
     val categoryName = todo.categoryId?.let { categories[it]?.name } ?: ""
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+    SurfaceCard(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        contentPadding = PaddingValues(12.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(24.dp))
+            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = ProductiveColor, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(

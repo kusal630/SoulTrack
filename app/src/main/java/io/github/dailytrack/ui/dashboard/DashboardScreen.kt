@@ -17,41 +17,112 @@
 
 package io.github.dailytrack.ui.dashboard
 
-import androidx.compose.animation.core.*
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AddTask
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SessionEntity
+import io.github.dailytrack.data.db.entity.TodoEntity
+import io.github.dailytrack.engine.DayStatus
+import io.github.dailytrack.engine.dayProgress
+import io.github.dailytrack.engine.todayProgressLabel
+import io.github.dailytrack.engine.weekStatusLabel
+import io.github.dailytrack.service.FocusSettings
 import io.github.dailytrack.ui.Screen
+import io.github.dailytrack.ui.brain.MoodEnvironmentSheet
+import io.github.dailytrack.ui.brain.MoodSelection
+import io.github.dailytrack.ui.brain.UpNextCard
+import io.github.dailytrack.ui.components.EmptyState
+import io.github.dailytrack.ui.components.GhostCta
+import io.github.dailytrack.ui.components.Hairline
+import io.github.dailytrack.ui.components.PieChartData
+import io.github.dailytrack.ui.components.PrimaryCta
+import io.github.dailytrack.ui.components.ScreenList
+import io.github.dailytrack.ui.components.SectionTitle
+import io.github.dailytrack.ui.components.SoulRings
+import io.github.dailytrack.ui.components.SurfaceCard
+import io.github.dailytrack.ui.components.TimeBreakdownPieChart
+import io.github.dailytrack.ui.components.WeekDayShortNames
+import io.github.dailytrack.ui.components.dayProgressFor
+import io.github.dailytrack.ui.components.rememberReduceMotion
+import io.github.dailytrack.ui.components.weekStatusesFor
 import io.github.dailytrack.ui.navigateSingleTop
-import io.github.dailytrack.ui.components.*
-import io.github.dailytrack.ui.theme.*
+import io.github.dailytrack.ui.theme.Dimens
+import io.github.dailytrack.ui.theme.ExerciseColor
+import io.github.dailytrack.ui.theme.LocalDayStatusColors
+import io.github.dailytrack.ui.theme.NeutralColor
+import io.github.dailytrack.ui.theme.ProductiveColor
+import io.github.dailytrack.ui.theme.RecoveryColor
+import io.github.dailytrack.ui.theme.SleepColor
+import io.github.dailytrack.ui.theme.SocialColor
+import io.github.dailytrack.ui.theme.TimerDigitsSmall
+import io.github.dailytrack.ui.theme.WastedColor
+import io.github.dailytrack.ui.theme.tabularFigures
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Today - the home screen.
+ *
+ * The ring hero is the product: the inner arc is today's tasks, the outer ring
+ * is the week that is being written one day at a time. Everything below it is
+ * supporting cast: what to do next, what is still open, and how the time went.
+ */
 @Composable
 fun DashboardScreen(
     navController: NavController,
@@ -60,358 +131,559 @@ fun DashboardScreen(
     val selectedDate by viewModel.selectedDate.collectAsState()
     val todaySessions by viewModel.todaySessions.collectAsState()
     val todayCoverage by viewModel.todayCoverage.collectAsState()
-    val growthScore by viewModel.growthScore.collectAsState()
-    val activeInsights by viewModel.activeInsights.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val loopStatus by viewModel.loopStatus.collectAsState()
+    val brainResult by viewModel.brainResult.collectAsState()
+    val quietness by viewModel.quietness.collectAsState()
+    val activeTodos by viewModel.activeTodos.collectAsState()
+    val completedTodos by viewModel.completedTodos.collectAsState()
+    val weeklyReport by viewModel.weeklyReport.collectAsState()
+    val activeInsights by viewModel.activeInsights.collectAsState()
+
+    val context = LocalContext.current
+    val noiseSensingEnabled = remember {
+        FocusSettings.isNoiseSensingEnabled(context.applicationContext)
+    }
+
+    val today = LocalDate.now()
+    val zone = remember { ZoneId.systemDefault() }
+    val allTodos = remember(activeTodos, completedTodos) { activeTodos + completedTodos }
+
+    val dayProgressValue = remember(activeTodos, completedTodos, today) {
+        dayProgressFor(today, allTodos, zone)
+    }
+    val weekStatuses = remember(weeklyReport, allTodos, today) {
+        weekStatusesFor(today, weeklyReport, allTodos, zone)
+    }
+
+    val assignedCount = remember(activeTodos, completedTodos, today) {
+        allTodos.count {
+            java.time.Instant.ofEpochMilli(it.createdAt).atZone(zone).toLocalDate() == today ||
+                it.deadline?.let { d ->
+                    java.time.Instant.ofEpochMilli(d).atZone(zone).toLocalDate() == today
+                } == true
+        }
+    }
+    val completedCount = remember(completedTodos, today) {
+        completedTodos.count {
+            it.completedAt != null &&
+                java.time.Instant.ofEpochMilli(it.completedAt!!).atZone(zone).toLocalDate() == today
+        }
+    }
+
+    var suggestionDismissed by rememberSaveable { mutableStateOf(false) }
+    var showMoodSheet by rememberSaveable { mutableStateOf(false) }
+    var moodSelection by remember { mutableStateOf(MoodSelection()) }
 
     val completedSessions = todaySessions.filter { !it.isActive }
-
-    Scaffold(
-        topBar = {
-            LargeTopAppBar(
-                title = {
-                    Column {
-                        Text("DailyTrack")
-                        Text(
-                            selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { navController.navigateSingleTop(Screen.Habits.route) }) {
-                        Icon(Icons.Default.Flag, contentDescription = "Habits")
-                    }
-                    IconButton(onClick = { navController.navigateSingleTop(Screen.Settings.route) }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 8.dp)
-        ) {
-            item {
-                DatePickerCard(
-                    selectedDate = selectedDate,
-                    onDateSelected = { viewModel.selectDate(it) }
-                )
-            }
-
-            if (activeSession != null) {
-                item {
-                    ActiveSessionCard(
-                        activeSession = activeSession!!,
-                        categoryName = activeSession!!.categoryId?.let { categories[it]?.name } ?: "",
-                        onStop = { viewModel.stopSession() }
-                    )
-                }
-            }
-
-            item {
-                TimeTrackingCard(coverage = todayCoverage)
-            }
-
-            if (todayCoverage != null &&
-                (todayCoverage!!.trackedSeconds + todayCoverage!!.untrackedSeconds) > 0
-            ) {
-                item {
-                    TimeBreakdownPieChart(
-                        data = listOf(
-                            PieChartData("Productive", (todayCoverage!!.productiveSeconds + todayCoverage!!.learningSeconds).toFloat(), ProductiveColor),
-                            PieChartData("Exercise", todayCoverage!!.exerciseSeconds.toFloat(), ExerciseColor),
-                            PieChartData("Sleep", todayCoverage!!.sleepSeconds.toFloat(), SleepColor),
-                            PieChartData("Social", todayCoverage!!.socialSeconds.toFloat(), SocialColor),
-                            PieChartData("Recovery", todayCoverage!!.recoverySeconds.toFloat(), RecoveryColor),
-                            PieChartData("Wasted", todayCoverage!!.wastedSeconds.toFloat(), WastedColor),
-                            PieChartData("Untracked", todayCoverage!!.untrackedSeconds.toFloat(), NeutralColor)
-                        ).filter { it.value > 0f }
-                    )
-                }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilledTonalButton(
-                        onClick = { navController.navigateSingleTop(Screen.Timer.route) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            if (activeSession != null) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = null
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (activeSession != null) "View Timer" else "Start Timer")
-                    }
-                    FilledTonalButton(
-                        onClick = { navController.navigateSingleTop(Screen.Growth.route) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.TrendingUp, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Growth")
-                    }
-                }
-            }
-
-            if (loopStatus?.isLoopDetected == true || loopStatus?.comfortZoneWarning == true) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (loopStatus?.isLoopDetected == true)
-                                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                            else
-                                MaterialTheme.colorScheme.tertiaryContainer
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                if (loopStatus?.isLoopDetected == true) Icons.Default.Repeat else Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = if (loopStatus?.isLoopDetected == true)
-                                    MaterialTheme.colorScheme.onErrorContainer
-                                else
-                                    MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    if (loopStatus?.isLoopDetected == true) "Routine Loop Detected" else "Comfort Zone Warning",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    if (loopStatus?.isLoopDetected == true)
-                                        "Your routine has been similar for ${loopStatus?.consecutiveDays} days. Try something new to grow."
-                                    else
-                                        "Your routine lacks variety. Add new activities to break out of your comfort zone.",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            item {
-                GrowthScoreCard(
-                    score = growthScore,
-                    hasData = (todayCoverage?.trackedSeconds ?: 0L) > 0L
-                )
-            }
-
-            if (completedSessions.isNotEmpty()) {
-                item {
-                    SectionHeader(title = "Completed Today (${completedSessions.size})")
-                }
-                items(completedSessions, key = { it.id }) { session ->
-                    CompletedSessionCard(session = session, categories = categories)
-                }
-            }
-
-            if (activeInsights.isNotEmpty()) {
-                item {
-                    SectionHeader(title = "Insights")
-                }
-                items(activeInsights.take(3)) { insight ->
-                    InsightCard(insight = insight, onDismiss = { viewModel.dismissInsight(insight.id) })
-                }
-            }
-        }
+    val todayStatus = when {
+        assignedCount == 0 -> DayStatus.NO_TASKS
+        dayProgressValue >= 1f -> DayStatus.DONE
+        else -> DayStatus.IN_PROGRESS
     }
-}
+    val statusColors = LocalDayStatusColors.current
 
-@Composable
-fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(vertical = 4.dp)
-    )
-}
-
-@Composable
-fun DatePickerCard(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+    ScreenList(
+        title = "Today",
+        subtitle = today.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
+        actions = {
+            IconButton(onClick = { navController.navigateSingleTop(Screen.Explore.route) }) {
+                Icon(Icons.Default.Explore, contentDescription = "Explore")
+            }
+            IconButton(onClick = { navController.navigateSingleTop(Screen.Habits.route) }) {
+                Icon(Icons.Default.Flag, contentDescription = "Habits")
+            }
+            IconButton(onClick = { navController.navigateSingleTop(Screen.Settings.route) }) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings")
+            }
+        }
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { onDateSelected(selectedDate.minusDays(1)) }) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "Previous day")
-            }
-            Text(
-                text = selectedDate.format(DateTimeFormatter.ofPattern("EEE, MMM d")),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+        item {
+            TodayHero(
+                dayProgress = dayProgressValue,
+                weekStatuses = weekStatuses,
+                todayIndex = today.dayOfWeek.value - 1,
+                completed = completedCount,
+                assigned = assignedCount,
+                status = todayStatus,
+                statusTint = statusColors.colorFor(
+                    if (todayStatus == DayStatus.IN_PROGRESS) null else todayStatus
+                ),
+                modifier = Modifier.padding(top = 8.dp)
             )
-            IconButton(onClick = {
-                val today = LocalDate.now()
-                if (selectedDate < today) onDateSelected(selectedDate.plusDays(1))
-            }) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Next day")
+        }
+
+        item {
+            TrackerChip(
+                activeSession = activeSession,
+                categoryName = activeSession?.categoryId?.let { categories[it]?.name } ?: "",
+                onStop = { viewModel.stopSession() }
+            )
+        }
+
+        if (activeSession == null) {
+            item {
+                if (suggestionDismissed || brainResult?.primary == null) {
+                    if (brainResult?.primary == null) {
+                        UpNextEmpty(
+                            hasTasks = activeTodos.isNotEmpty(),
+                            onOpenTasks = { navController.navigateSingleTop(Screen.Todo.route) }
+                        )
+                    } else {
+                        AlternativesCard(
+                            onOpenTasks = { navController.navigateSingleTop(Screen.Todo.route) },
+                            onUndo = { suggestionDismissed = false }
+                        )
+                    }
+                } else {
+                    UpNextCard(
+                        result = brainResult,
+                        quietness = quietness,
+                        noiseEnabled = noiseSensingEnabled,
+                        environmentChips = moodSelection.chips(),
+                        onStartTask = { viewModel.startTask(it) },
+                        onNotNow = { suggestionDismissed = true },
+                        onOpenTasks = { navController.navigateSingleTop(Screen.Todo.route) },
+                        onTune = { showMoodSheet = true }
+                    )
+                }
             }
+        }
+
+        item {
+            SectionTitle(
+                title = "Tasks for today",
+                subtitle = if (assignedCount == 0) {
+                    "Assigning a task starts the day ring"
+                } else {
+                    "$completedCount of $assignedCount done"
+                },
+                trailing = {
+                    if (activeTodos.isNotEmpty()) {
+                        GhostCta(text = "All tasks", onClick = {
+                            navController.navigateSingleTop(Screen.Todo.route)
+                        })
+                    }
+                }
+            )
+        }
+
+        if (activeTodos.isNotEmpty()) {
+            items(
+                activeTodos.sortedWith(
+                    compareByDescending<TodoEntity> { it.priority }
+                        .thenBy { it.deadline ?: Long.MAX_VALUE }
+                ).take(4),
+                key = { it.id }
+            ) { todo ->
+                TodayTaskRow(todo = todo, onToggle = { viewModel.completeTodo(todo.id) })
+            }
+        } else {
+            item {
+                EmptyState(
+                    title = "No tasks yet",
+                    message = "Add what you want to finish today. The ring fills as each one gets done.",
+                    icon = Icons.Default.AddTask,
+                    actionLabel = "Add a task",
+                    onAction = { navController.navigateSingleTop(Screen.Todo.route) }
+                )
+            }
+        }
+
+        item {
+            PrimaryCta(
+                text = if (activeSession != null) "Open timer" else "Start focus session",
+                onClick = {
+                    navController.navigateSingleTop(
+                        if (activeSession != null) Screen.Timer.route else Screen.Pomodoro.route
+                    )
+                },
+                icon = Icons.Default.PlayArrow
+            )
+        }
+
+        if (loopStatus?.isLoopDetected == true || loopStatus?.comfortZoneWarning == true) {
+            item {
+                ComfortZoneCard(
+                    isLoop = loopStatus?.isLoopDetected == true,
+                    consecutiveDays = loopStatus?.consecutiveDays ?: 0
+                )
+            }
+        }
+
+        if (todayCoverage != null &&
+            (todayCoverage!!.trackedSeconds + todayCoverage!!.untrackedSeconds) > 0
+        ) {
+            item {
+                TimeBreakdownPieChart(
+                    data = listOf(
+                        PieChartData(
+                            "Productive",
+                            (todayCoverage!!.productiveSeconds + todayCoverage!!.learningSeconds).toFloat(),
+                            ProductiveColor
+                        ),
+                        PieChartData("Exercise", todayCoverage!!.exerciseSeconds.toFloat(), ExerciseColor),
+                        PieChartData("Sleep", todayCoverage!!.sleepSeconds.toFloat(), SleepColor),
+                        PieChartData("Social", todayCoverage!!.socialSeconds.toFloat(), SocialColor),
+                        PieChartData("Recovery", todayCoverage!!.recoverySeconds.toFloat(), RecoveryColor),
+                        PieChartData("Wasted", todayCoverage!!.wastedSeconds.toFloat(), WastedColor),
+                        PieChartData("Untracked", todayCoverage!!.untrackedSeconds.toFloat(), NeutralColor)
+                    ).filter { it.value > 0f }
+                )
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Dimens.CardGap)
+            ) {
+                GhostCta(
+                    text = "History",
+                    onClick = { navController.navigateSingleTop(Screen.History.route) },
+                    icon = Icons.Default.History,
+                    modifier = Modifier.weight(1f)
+                )
+                GhostCta(
+                    text = "Insights",
+                    onClick = { navController.navigateSingleTop(Screen.Insights.route) },
+                    icon = Icons.Default.BarChart,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        if (completedSessions.isNotEmpty()) {
+            item { SectionTitle(title = "Finished sessions (${completedSessions.size})") }
+            items(completedSessions.take(4), key = { it.id }) { session ->
+                CompletedSessionRow(
+                    session = session,
+                    categoryName = session.categoryId?.let { categories[it]?.name } ?: ""
+                )
+            }
+        }
+
+        if (activeInsights.isNotEmpty()) {
+            item { SectionTitle(title = "Insights") }
+            items(activeInsights.take(2)) { insight ->
+                InsightCard(insight = insight, onDismiss = { viewModel.dismissInsight(insight.id) })
+            }
+        }
+    }
+
+    if (showMoodSheet) {
+        MoodEnvironmentSheet(
+            current = moodSelection,
+            onDismiss = { showMoodSheet = false },
+            onSave = {
+                moodSelection = it
+                showMoodSheet = false
+            }
+        )
+    }
+}
+
+/** The hero: rings, plain-language counts, and the day's verdict. */
+@Composable
+private fun TodayHero(
+    dayProgress: Float,
+    weekStatuses: List<DayStatus?>,
+    todayIndex: Int,
+    completed: Int,
+    assigned: Int,
+    status: DayStatus,
+    statusTint: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    val reduceMotion = rememberReduceMotion()
+
+    SurfaceCard(modifier = modifier, contentPadding = PaddingValues(Dimens.CardPadding)) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            SoulRings(
+                dayProgress = dayProgress,
+                weekStatuses = weekStatuses,
+                todayIndex = todayIndex,
+                modifier = Modifier.size(Dimens.HeroRing),
+                animate = !reduceMotion,
+                contentDescription = todayProgressLabel(completed, assigned) + " " +
+                    weekStatusLabel(weekStatuses, WeekDayShortNames)
+            )
+
+            Spacer(modifier = Modifier.height(Dimens.CardGap))
+
+            Text(
+                text = if (assigned == 0) "No tasks assigned" else "$completed of $assigned done",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = when (status) {
+                    DayStatus.NO_TASKS -> "The inner ring fills as you finish tasks"
+                    DayStatus.DONE -> "Day closed at 12 - the week ring just recorded it"
+                    else -> "The week ring records today when the day ends"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(Dimens.CardGap))
+            Hairline()
+            Spacer(modifier = Modifier.height(Dimens.CardGap))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                WeekLabel("Mon", "Tue")
+                WeekLabel("Wed", "Thu")
+                WeekLabel("Fri", "Sat")
+                WeekLabel("Sun", "")
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            StatusLegendRow(tint = statusTint, status = status)
         }
     }
 }
 
 @Composable
-fun ActiveSessionCard(
-    activeSession: SessionEntity,
+private fun WeekLabel(a: String, b: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = if (b.isEmpty()) a else "$a · $b",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/** Status badge always pairs the colour with an icon and a word. */
+@Composable
+private fun StatusLegendRow(tint: androidx.compose.ui.graphics.Color, status: DayStatus) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = when (status) {
+                DayStatus.DONE -> Icons.Default.CheckCircle
+                DayStatus.TASKS_NOT_MET -> Icons.Default.Repeat
+                DayStatus.NOT_PRODUCTIVE -> Icons.Default.Timer
+                DayStatus.WASTING_TIME -> Icons.Default.LocalFireDepartment
+                else -> Icons.Default.Timer
+            },
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = status.label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+/** Live tracking chip with tabular figures so the digits never jitter. */
+@Composable
+private fun TrackerChip(
+    activeSession: SessionEntity?,
     categoryName: String,
     onStop: () -> Unit
 ) {
-    var elapsed by remember { mutableLongStateOf(System.currentTimeMillis() - activeSession.startTime) }
+    var elapsed by remember(activeSession?.id) {
+        mutableLongStateOf(
+            activeSession?.let { System.currentTimeMillis() - it.startTime } ?: 0L
+        )
+    }
 
-    LaunchedEffect(activeSession.startTime) {
+    LaunchedEffect(activeSession?.id, activeSession?.startTime) {
+        val start = activeSession?.startTime ?: return@LaunchedEffect
         while (true) {
-            elapsed = System.currentTimeMillis() - activeSession.startTime
+            elapsed = System.currentTimeMillis() - start
             kotlinx.coroutines.delay(1000)
         }
     }
 
-    val hours = TimeUnit.MILLISECONDS.toHours(elapsed)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(elapsed) % 60
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(elapsed) % 60
+    if (activeSession == null) return
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+    SurfaceCard(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentPadding = PaddingValues(horizontal = Dimens.CardPadding, vertical = 12.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = activeSession.title.ifBlank { "Tracking" },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (categoryName.isNotBlank()) {
                     Text(
-                        text = activeSession.title.ifBlank { "Active Session" },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        text = categoryName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (categoryName.isNotBlank()) {
-                        Text(
-                            text = categoryName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-                FilledTonalButton(onClick = onStop) {
-                    Icon(Icons.Default.Stop, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Stop")
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = String.format(java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds),
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
+                text = formatHMS(elapsed),
+                style = TimerDigitsSmall,
+                color = MaterialTheme.colorScheme.primary
             )
+            Spacer(modifier = Modifier.width(12.dp))
+            IconButton(onClick = onStop, modifier = Modifier.size(Dimens.MinTouchTarget)) {
+                Icon(
+                    Icons.Default.Stop,
+                    contentDescription = "Stop tracking",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+/** One task, right on the home screen. Ticking it springs the ring. */
+@Composable
+private fun TodayTaskRow(todo: TodoEntity, onToggle: () -> Unit) {
+    SurfaceCard(
+        contentPadding = PaddingValues(horizontal = Dimens.CardPadding, vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onToggle,
+                modifier = Modifier.size(Dimens.MinTouchTarget)
+            ) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = "Complete ${todo.title}",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = todo.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val meta = buildList {
+                    if (todo.estimatedMinutes > 0) add("${todo.estimatedMinutes} min")
+                    if (todo.priority >= 2) add(if (todo.priority >= 3) "High priority" else "Medium priority")
+                }.joinToString(" · ")
+                if (meta.isNotEmpty()) {
+                    Text(
+                        text = meta,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-fun TimeTrackingCard(coverage: io.github.dailytrack.engine.TimeCoverage?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+private fun UpNextEmpty(hasTasks: Boolean, onOpenTasks: () -> Unit) {
+    SurfaceCard {
+        Column {
             Text(
-                text = "Time Breakdown",
+                text = if (hasTasks) "Nothing urgent" else "No tasks to suggest yet",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
+                fontWeight = FontWeight.SemiBold
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (hasTasks) {
+                    "The app will surface the best next task once your mood, place and history say something useful."
+                } else {
+                    "Add a task and the intelligent layer starts ranking what fits this moment."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!hasTasks) {
+                Spacer(modifier = Modifier.height(Dimens.CardGap))
+                GhostCta(text = "Open tasks", onClick = onOpenTasks)
+            }
+        }
+    }
+}
 
-            val hasTracked = (coverage?.trackedSeconds ?: 0) > 0
-
-            if (hasTracked) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    MetricItem(
-                        "Productive",
-                        formatDurationHMS((coverage?.productiveSeconds ?: 0) + (coverage?.learningSeconds ?: 0)),
-                        ProductiveColor
-                    )
-                    MetricItem(
-                        "Exercise",
-                        formatDurationHMS(coverage?.exerciseSeconds ?: 0),
-                        ExerciseColor
-                    )
-                    MetricItem(
-                        "Sleep",
-                        formatDurationHMS(coverage?.sleepSeconds ?: 0),
-                        SleepColor
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    MetricItem(
-                        "Wasted",
-                        formatDurationHMS(coverage?.wastedSeconds ?: 0),
-                        WastedColor
-                    )
-                    MetricItem(
-                        "Tracked",
-                        formatDurationHMS(coverage?.trackedSeconds ?: 0),
-                        MaterialTheme.colorScheme.primary
-                    )
-                    MetricItem(
-                        "Free",
-                        formatDurationHMS(coverage?.untrackedSeconds ?: 0),
-                        NeutralColor
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                LinearProgressIndicator(
-                    progress = { (coverage?.trackedRatio ?: 0.0).toFloat() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
-            } else {
+@Composable
+private fun AlternativesCard(onOpenTasks: () -> Unit, onUndo: () -> Unit) {
+    SurfaceCard {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "No time tracked today. Start a timer to begin tracking.",
+                    text = "Suggestion skipped",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onUndo, modifier = Modifier.size(Dimens.MinTouchTarget)) {
+                    Icon(Icons.Default.Undo, contentDescription = "Show suggestion again")
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Nothing changes - the pick will come back the next time the screen refreshes.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(Dimens.CardGap))
+            GhostCta(text = "Open tasks", onClick = onOpenTasks)
+        }
+    }
+}
+
+@Composable
+private fun ComfortZoneCard(isLoop: Boolean, consecutiveDays: Int) {
+    val statusColors = LocalDayStatusColors.current
+    val tint = if (isLoop) statusColors.wastingTime else statusColors.notProductive
+    SurfaceCard(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                if (isLoop) Icons.Default.Repeat else Icons.Default.LocalFireDepartment,
+                contentDescription = null,
+                tint = tint
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = if (isLoop) "Routine loop detected" else "Comfort zone warning",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = if (isLoop) {
+                        "Your routine has looked the same for $consecutiveDays days. Try something new to grow."
+                    } else {
+                        "Your routine lacks variety. Add a new activity to break out of the comfort zone."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -421,88 +693,39 @@ fun TimeTrackingCard(coverage: io.github.dailytrack.engine.TimeCoverage?) {
 }
 
 @Composable
-fun MetricItem(label: String, value: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-fun CompletedSessionCard(
-    session: SessionEntity,
-    categories: Map<Long, io.github.dailytrack.data.db.entity.CategoryEntity>
-) {
-    val duration = if (session.endTime != null) {
-        session.endTime - session.startTime
-    } else 0L
-
-    val hours = TimeUnit.MILLISECONDS.toHours(duration)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(duration) % 60
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(duration) % 60
-
-    val categoryName = session.categoryId?.let { categories[it]?.name } ?: ""
-    val startTimeStr = java.time.Instant.ofEpochMilli(session.startTime)
-        .atZone(ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("HH:mm"))
-    val endTimeStr = session.endTime?.let {
-        java.time.Instant.ofEpochMilli(it)
-            .atZone(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("HH:mm"))
-    } ?: ""
-
-    Card(modifier = Modifier.fillMaxWidth()) {
+fun CompletedSessionRow(session: SessionEntity, categoryName: String) {
+    val duration = (session.endTime ?: session.startTime) - session.startTime
+    SurfaceCard(contentPadding = PaddingValues(12.dp)) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                Icons.Default.CheckCircle,
+                Icons.Default.Check,
                 contentDescription = null,
                 tint = ProductiveColor,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = session.title.ifBlank { "Session" },
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Row {
-                    if (categoryName.isNotBlank()) {
-                        Text(
-                            text = categoryName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = " · ",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                if (categoryName.isNotBlank()) {
                     Text(
-                        text = "$startTimeStr - $endTimeStr",
+                        text = categoryName,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             Text(
-                text = String.format(java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds),
-                style = MaterialTheme.typography.titleMedium,
+                text = formatDurationHMS(duration / 1000),
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -511,149 +734,63 @@ fun CompletedSessionCard(
 }
 
 @Composable
-fun GrowthScoreCard(score: Double, hasData: Boolean = true) {
-    val animatedScore by animateFloatAsState(
-        targetValue = score.toFloat(),
-        animationSpec = tween(1000, easing = FastOutSlowInEasing),
-        label = "score"
-    )
-
-    val scoreColor = when {
-        !hasData -> NeutralColor
-        score >= 70 -> ProductiveColor
-        score >= 40 -> ExerciseColor
-        else -> WastedColor
-    }
-
-    val animatedScoreColor by animateColorAsState(
-        targetValue = scoreColor,
-        animationSpec = tween(600),
-        label = "score_color"
-    )
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = scoreColor.copy(alpha = 0.08f)
-        )
+fun InsightCard(insight: io.github.dailytrack.data.db.entity.InsightEntity, onDismiss: () -> Unit) {
+    SurfaceCard(
+        containerColor = when (insight.severity) {
+            "CRITICAL", "WARNING" -> MaterialTheme.colorScheme.surfaceContainerHigh
+            "CAUTION" -> MaterialTheme.colorScheme.surfaceContainerHigh
+            else -> MaterialTheme.colorScheme.surfaceContainer
+        },
+        contentPadding = PaddingValues(12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Growth Score",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (hasData) "Today's progress" else "No tracked time yet",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { (animatedScore / 100f).coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .width(120.dp)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = animatedScoreColor,
-                    trackColor = animatedScoreColor.copy(alpha = 0.15f)
-                )
-            }
-
-            Box(contentAlignment = Alignment.Center) {
-                Canvas(modifier = Modifier.size(72.dp)) {
-                    val strokeWidth = 6.dp.toPx()
-                    val diameter = size.minDimension - strokeWidth
-                    val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
-                    val arcSize = Size(diameter, diameter)
-
-                    drawArc(
-                        color = Color.Gray.copy(alpha = 0.12f),
-                        startAngle = -90f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = insight.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
                     )
-
-                    drawArc(
-                        color = animatedScoreColor,
-                        startAngle = -90f,
-                        sweepAngle = 360f * (animatedScore / 100f).coerceIn(0f, 1f),
-                        useCenter = false,
-                        topLeft = topLeft,
-                        size = arcSize,
-                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = insight.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (insight.actionLabel.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = insight.actionLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(Dimens.MinTouchTarget)) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Dismiss insight",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = "${score.toInt()}",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = animatedScoreColor,
-                    fontWeight = FontWeight.Bold
-                )
             }
         }
     }
 }
 
-@Composable
-fun InsightCard(insight: io.github.dailytrack.data.db.entity.InsightEntity, onDismiss: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = when (insight.severity) {
-                "CRITICAL" -> MaterialTheme.colorScheme.errorContainer
-                "WARNING" -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                "CAUTION" -> MaterialTheme.colorScheme.tertiaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = insight.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = insight.message,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (insight.actionLabel.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = insight.actionLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Dismiss",
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
+fun formatHMS(millis: Long): String {
+    val totalSeconds = TimeUnit.MILLISECONDS.toSeconds(millis).coerceAtLeast(0)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val secs = totalSeconds % 60
+    return if (hours > 0) {
+        String.format(java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, secs)
+    } else {
+        String.format(java.util.Locale.US, "%02d:%02d", minutes, secs)
     }
 }
 
@@ -667,3 +804,4 @@ fun formatDurationHMS(seconds: Long): String {
         else -> String.format(java.util.Locale.US, "%02d", secs)
     }
 }
+

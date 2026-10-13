@@ -240,7 +240,7 @@ class PomodoroWidgetProvider : AppWidgetProvider() {
         val isBreak = prefs.getBoolean("is_break", false)
         val durationIndex = prefs.getInt("duration_index", 0)
         val sessionNumber = prefs.getInt("session_number", 0)
-        val workColor = 0xFFE94560.toInt()
+        val workColor = 0xFF4FD1E8.toInt()
 
         views.setTextViewText(R.id.widget_pom_session_count, "Session $sessionNumber/4")
         views.setTextViewText(R.id.widget_pom_duration, "${WORK_DURATIONS[durationIndex]} min")
@@ -261,16 +261,16 @@ class PomodoroWidgetProvider : AppWidgetProvider() {
                     R.id.widget_pom_status,
                     if (isLongBreak) "Long Break" else "Short Break"
                 )
-                views.setTextColor(R.id.widget_pom_timer, 0xFFFFAB40.toInt())
+                views.setTextColor(R.id.widget_pom_timer, 0xFF5B9DFF.toInt())
             } else {
                 views.setTextViewText(R.id.widget_pom_status, "Focusing...")
                 val progress = (elapsed.toFloat() / totalMillis.toFloat()).coerceIn(0f, 1f)
                 val fromR = android.graphics.Color.red(workColor).toFloat()
                 val fromG = android.graphics.Color.green(workColor).toFloat()
                 val fromB = android.graphics.Color.blue(workColor).toFloat()
-                val toR = android.graphics.Color.red(0xFFFFAB40.toInt()).toFloat()
-                val toG = android.graphics.Color.green(0xFFFFAB40.toInt()).toFloat()
-                val toB = android.graphics.Color.blue(0xFFFFAB40.toInt()).toFloat()
+                val toR = android.graphics.Color.red(0xFF5B9DFF.toInt()).toFloat()
+                val toG = android.graphics.Color.green(0xFF5B9DFF.toInt()).toFloat()
+                val toB = android.graphics.Color.blue(0xFF5B9DFF.toInt()).toFloat()
                 val r = (fromR + (toR - fromR) * progress).toInt()
                 val g = (fromG + (toG - fromG) * progress).toInt()
                 val b = (fromB + (toB - fromB) * progress).toInt()

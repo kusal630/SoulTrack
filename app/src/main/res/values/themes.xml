@@ -1,8 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.DailyTrack" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- App chrome: pure black, transparent bars, dark icons off. -->
+    <style name="Theme.DailyTrack" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">@color/soul_background</item>
+        <item name="android:colorAccent">@color/soul_mint</item>
+    </style>
+
+    <!-- Android 12+ splash: black ground with the ring mark. -->
+    <style name="Theme.DailyTrack.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/soul_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimationDuration">400</item>
+        <item name="postSplashScreenTheme">@style/Theme.DailyTrack</item>
     </style>
 </resources>

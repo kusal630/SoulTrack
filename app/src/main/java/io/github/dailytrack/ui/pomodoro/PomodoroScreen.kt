@@ -56,12 +56,27 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.api.QuotesApi
 import io.github.dailytrack.data.db.entity.TodoEntity
+import io.github.dailytrack.ui.components.*
 import io.github.dailytrack.ui.navigateToHome
+import io.github.dailytrack.ui.components.SurfaceCard
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalView
+import io.github.dailytrack.service.FocusDndManager
+import io.github.dailytrack.ui.theme.Aqua
+import io.github.dailytrack.ui.theme.Mint
+import io.github.dailytrack.ui.theme.Dimens
+import io.github.dailytrack.ui.theme.ExerciseColor
+import io.github.dailytrack.ui.theme.ProductiveColor
+import io.github.dailytrack.ui.theme.OnMint
+import io.github.dailytrack.ui.theme.Sky
+import io.github.dailytrack.ui.theme.TimerDigits
+import io.github.dailytrack.ui.theme.WastedColor
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 
-private val WorkColor = Color(0xFFE94560)
-private val BreakColor = Color(0xFFFFAB40)
+/** Focus runs in aqua, breaks in sky - straight out of the ring logo. */
+private val BreakColor = Sky
+private val WorkColor = Aqua
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,13 +109,23 @@ fun PomodoroScreen(
     val isBreak = activePomodoro?.type == "BREAK"
     val coroutineScope = rememberCoroutineScope()
 
-    val activeColor = if (isBreak) BreakColor else WorkColor
+    val activeColor = if (isBreak) BreakColor else MaterialTheme.colorScheme.primary
 
     val animatedActiveColor by animateColorAsState(
         targetValue = activeColor,
         animationSpec = tween(600, easing = FastOutSlowInEasing),
         label = "active_color"
     )
+
+    val view = LocalView.current
+    DisposableEffect(isRunning) {
+        view.keepScreenOn = isRunning
+        onDispose { view.keepScreenOn = false }
+    }
+
+    var dndEnabled by rememberSaveable {
+        mutableStateOf(FocusDndManager.didChangeFilter(context))
+    }
 
     LaunchedEffect(Unit) {
         val quote = QuotesApi.getTimedQuote()
@@ -224,6 +249,7 @@ fun PomodoroScreen(
                 }
 
                 item {
+                    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier.size(260.dp)
@@ -248,7 +274,7 @@ fun PomodoroScreen(
                             val arcSize = Size(diameter, diameter)
 
                             drawArc(
-                                color = Color.Gray.copy(alpha = 0.12f),
+                                color = trackColor,
                                 startAngle = -90f,
                                 sweepAngle = 360f,
                                 useCenter = false,
@@ -260,11 +286,11 @@ fun PomodoroScreen(
                             if (isRunning || progress > 0f) {
                                 drawArc(
                                     brush = Brush.sweepGradient(
-                                        colors = listOf(
-                                            animatedActiveColor,
-                                            animatedActiveColor.copy(alpha = 0.5f),
-                                            animatedActiveColor
-                                        )
+                                        colors = if (isBreak) {
+                                            listOf(Sky, Aqua.copy(alpha = 0.55f), Sky)
+                                        } else {
+                                            listOf(Aqua, Mint, Aqua.copy(alpha = 0.7f))
+                                        }
                                     ),
                                     startAngle = -90f,
                                     sweepAngle = 360f * animatedProgress,
@@ -287,12 +313,9 @@ fun PomodoroScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds),
-                                fontSize = 52.sp,
-                                fontWeight = FontWeight.Thin,
-                                fontFamily = FontFamily.Monospace,
+                                style = TimerDigits,
                                 color = if (isRunning) animatedActiveColor
-                                else MaterialTheme.colorScheme.onSurface,
-                                letterSpacing = 2.sp
+                                else MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -338,7 +361,7 @@ fun PomodoroScreen(
                                     Icon(
                                         if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                         contentDescription = if (isSaved) "Unsave" else "Save",
-                                        tint = if (isSaved) Color(0xFFE94560) else animatedActiveColor
+                                        tint = if (isSaved) MaterialTheme.colorScheme.primary else animatedActiveColor
                                     )
                                 }
                             }
@@ -458,6 +481,59 @@ fun PomodoroScreen(
                     }
 
                     item {
+                        SurfaceCard(
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.NotificationsOff,
+                                    contentDescription = null,
+                                    tint = if (dndEnabled) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Do Not Disturb",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Silence notifications while the session runs",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = dndEnabled,
+                                    onCheckedChange = { want ->
+                                        if (want) {
+                                            if (FocusDndManager.hasAccess(context)) {
+                                                FocusDndManager.enable(context)
+                                                dndEnabled = true
+                                            } else {
+                                                context.startActivity(FocusDndManager.settingsIntent())
+                                            }
+                                        } else {
+                                            FocusDndManager.restore(context)
+                                            dndEnabled = false
+                                        }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = OnMint,
+                                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                        checkedBorderColor = MaterialTheme.colorScheme.primary,
+                                        uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        uncheckedBorderColor = MaterialTheme.colorScheme.outline
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    item {
                         Button(
                             onClick = {
                                 val selectedTodo = activeTodos.find { it.id == selectedTodoId }
@@ -485,9 +561,10 @@ fun PomodoroScreen(
                                 )
                             },
                             modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(50),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = WorkColor
+                                containerColor = WorkColor,
+                                contentColor = OnMint
                             )
                         ) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
@@ -527,7 +604,10 @@ fun PomodoroScreen(
                         )
                     }
                     items(workSessions.reversed(), key = { it.id }) { pomodoro ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
+                        SurfaceCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -537,7 +617,7 @@ fun PomodoroScreen(
                                 Icon(
                                     Icons.Default.Work,
                                     contentDescription = null,
-                                    tint = if (pomodoro.isCompleted) Color(0xFFE94560) else Color(0xFF757575)
+                                    tint = if (pomodoro.isCompleted) ProductiveColor else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
@@ -591,7 +671,7 @@ fun PomodoroScreen(
                 showPriorityWarning = false
                 pendingPomodoroTodo = null
             },
-            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFF57C00)) },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = ExerciseColor) },
             title = { Text("Priority Warning") },
             text = {
                 Column {
@@ -607,9 +687,9 @@ fun PomodoroScreen(
                         ) {
                             Surface(
                                 color = when (task.priority) {
-                                    3 -> Color(0xFFE94560).copy(alpha = 0.15f)
-                                    2 -> Color(0xFFF57C00).copy(alpha = 0.15f)
-                                    else -> Color(0xFF4CAF50).copy(alpha = 0.15f)
+                                    3 -> WastedColor.copy(alpha = 0.15f)
+                                    2 -> ExerciseColor.copy(alpha = 0.15f)
+                                    else -> ProductiveColor.copy(alpha = 0.15f)
                                 },
                                 shape = MaterialTheme.shapes.extraSmall
                             ) {
@@ -622,9 +702,9 @@ fun PomodoroScreen(
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = when (task.priority) {
-                                        3 -> Color(0xFFE94560)
-                                        2 -> Color(0xFFF57C00)
-                                        else -> Color(0xFF4CAF50)
+                                        3 -> WastedColor
+                                        2 -> ExerciseColor
+                                        else -> ProductiveColor
                                     },
                                     fontWeight = FontWeight.Bold
                                 )

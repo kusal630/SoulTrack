@@ -28,6 +28,11 @@ import io.github.dailytrack.data.db.entity.*
 import io.github.dailytrack.data.repository.*
 import io.github.dailytrack.engine.*
 import io.github.dailytrack.service.PomodoroForegroundService
+import io.github.dailytrack.service.FocusDndManager
+import io.github.dailytrack.service.TimerStateStore
+import io.github.dailytrack.service.FocusSettings
+import io.github.dailytrack.service.NoiseMonitor
+import io.github.dailytrack.widget.TimerWidgetProvider
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -45,11 +50,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val pomodoroRepo = PomodoroRepository(db.pomodoroSessionDao())
     private val savedQuoteRepo = SavedQuoteRepository(db.savedQuoteDao())
     private val habitRepo = HabitRepository(db.habitDao())
+    private val goalRepo = GoalRepository(db.goalDao())
     private val routineEngine = RoutineLoopEngine()
 
     private val timeEngine = TimeCoverageEngine()
     private val growthEngine = GrowthEngine()
     private val insightEngine = InsightEngine()
+    private val brainLayer = BrainLayer()
+    private val focusabilityEngine = FocusabilityEngine()
+
+    private var behavior: BehaviorProfile = BehaviorProfile.coldStart()
+    private var behaviorLoadedAt = 0L
+    private var lastBrainRefresh = 0L
+
+    private val _brainResult = MutableStateFlow<BrainResult?>(null)
+    val brainResult: StateFlow<BrainResult?> = _brainResult
+
+    private val _quietness = MutableStateFlow<Int?>(null)
+    val quietness: StateFlow<Int?> = _quietness
+
+    private val _goals = MutableStateFlow<List<GoalEntity>>(emptyList())
+    val goals: StateFlow<List<GoalEntity>> = _goals
+
+    private val _reminders = MutableStateFlow<List<ReminderEntity>>(emptyList())
+    val reminders: StateFlow<List<ReminderEntity>> = _reminders
+
+    private val _achievements = MutableStateFlow<List<AchievementEntity>>(emptyList())
+    val achievements: StateFlow<List<AchievementEntity>> = _achievements
+
+    private val _userStats = MutableStateFlow<UserStatsEntity?>(null)
+    val userStats: StateFlow<UserStatsEntity?> = _userStats
+
+    private val _weeklyReport = MutableStateFlow<Map<LocalDate, TimeCoverage>>(emptyMap())
+    val weeklyReport: StateFlow<Map<LocalDate, TimeCoverage>> = _weeklyReport
+
+    private val _productivityScore = MutableStateFlow(0f)
+    val productivityScore: StateFlow<Float> = _productivityScore
 
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate
@@ -183,6 +219,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     generateInsights()
                     calculateDailyProductivity()
                     calculateWeeklyStats()
+                    calculateWeeklyReport()
                 }
         }
 
@@ -190,6 +227,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             savedQuoteRepo.getAllSavedQuotes().collect { quotes ->
                 _savedQuotes.value = quotes
             }
+        }
+
+        viewModelScope.launch {
+            goalRepo.getAllGoals().collect { _goals.value = it }
+        }
+
+        viewModelScope.launch {
+            db.reminderDao().getAllReminders().collect { _reminders.value = it }
+        }
+
+        viewModelScope.launch {
+            db.achievementDao().getAllAchievements().collect { _achievements.value = it }
+        }
+
+        viewModelScope.launch {
+            db.achievementDao().getUserStats().collect { _userStats.value = it }
         }
 
         viewModelScope.launch {
@@ -225,6 +278,131 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 tick()
             }
         }
+
+        // Brain layer: build the personal behaviour model, then keep the
+        // recommendation fresh as tasks, focus and the environment change.
+        viewModelScope.launch {
+            rebuildBehavior()
+            refreshBrain(force = true)
+        }
+        viewModelScope.launch {
+            NoiseMonitor.reading.collect { reading ->
+                _quietness.value = reading?.quietness
+                refreshBrain()
+            }
+        }
+        viewModelScope.launch {
+            _activeTodos.collect { refreshBrain(force = true) }
+        }
+        viewModelScope.launch {
+            _categories.collect { if (it.isNotEmpty()) refreshBrain(force = true) }
+        }
+    }
+
+    /** Rebuilds the "how does this person behave at which hour" model. */
+    private suspend fun rebuildBehavior() {
+        val now = System.currentTimeMillis()
+        val cutoff = now - 45L * 24 * 60 * 60 * 1000
+        runCatching {
+            val sessions = db.sessionDao().getSessionsBetweenSync(cutoff, now)
+            val todos = db.todoDao().getCompletedTodosSince(cutoff) + _activeTodos.value
+            behavior = BehaviorProfiler.build(
+                sessions = sessions,
+                todos = todos,
+                categories = _categories.value,
+                now = now
+            )
+            behaviorLoadedAt = now
+            refreshBrain(force = true)
+        }
+    }
+
+    private suspend fun refreshBrain(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - lastBrainRefresh < 30_000L) return
+        if (!FocusSettings.isRecommendationsEnabled(getApplication())) {
+            _brainResult.value = null
+            return
+        }
+        lastBrainRefresh = now
+        if (now - behaviorLoadedAt > 10 * 60_000L) {
+            viewModelScope.launch { rebuildBehavior() }
+        }
+
+        val context = buildFocusContext(now)
+        val focusability = focusabilityEngine.evaluate(context)
+        val candidates = _activeTodos.value.map { it.toCandidate() }
+        _brainResult.value = brainLayer.recommend(
+            BrainInputs(
+                now = now,
+                candidates = candidates,
+                focusability = focusability,
+                behavior = behavior,
+                mood = context.mood,
+                energy = context.energy
+            )
+        )
+    }
+
+    private suspend fun buildFocusContext(now: Long): FocusContext {
+        val zone = ZoneId.systemDefault()
+        val active = _activeSession.value
+        val completedToday = _todaySessions.value.filter { !it.isActive }
+        val lastEnd = completedToday.mapNotNull { it.endTime }.maxOrNull()
+        val minutesInCurrentSession = active?.let { ((now - it.startTime) / 60_000L).toInt() }
+        val minutesSinceBreak = when {
+            active != null && lastEnd != null -> ((now - lastEnd) / 60_000L).toInt()
+            active != null -> minutesInCurrentSession
+            lastEnd != null -> ((now - lastEnd) / 60_000L).toInt()
+            else -> null
+        }
+        val recentMood = runCatching {
+            getApplication<SoulTrackApp>().database.moodCheckInDao()
+                .getMoodCheckInsInRange(now - 24L * 60 * 60 * 1000, now)
+                .first()
+                .maxByOrNull { it.timestamp }
+        }.getOrNull()
+
+        return FocusContext(
+            hourOfDay = Instant.ofEpochMilli(now).atZone(zone).hour,
+            dayOfWeek = Instant.ofEpochMilli(now).atZone(zone).dayOfWeek.value,
+            minutesSinceBreak = minutesSinceBreak?.coerceAtLeast(0),
+            minutesInCurrentSession = minutesInCurrentSession?.coerceAtLeast(0),
+            quietness = NoiseMonitor.quietness(getApplication()),
+            mood = recentMood?.mood,
+            energy = recentMood?.energy
+        )
+    }
+
+    private fun TodoEntity.toCandidate() = TaskCandidate(
+        id = id,
+        title = title,
+        priority = priority,
+        deadline = deadline,
+        estimatedMinutes = estimatedMinutes,
+        categoryType = _categories.value[categoryId]?.type ?: "ACTIVITY",
+        categoryId = categoryId,
+        createdAt = createdAt
+    )
+
+    /** Starts a tracked, Do-Not-Disturb focus session for a recommended task. */
+    fun startTask(task: TaskCandidate) {
+        val fallbackCategoryId = _categories.value.values
+            .firstOrNull { it.type == "PRODUCTIVE" && !it.archived }?.id
+        val categoryId = _categories.value[task.categoryId]?.id ?: fallbackCategoryId
+        startSession(
+            title = task.title,
+            categoryId = categoryId,
+            autoDnd = task.requiresDeepFocus
+        )
+    }
+
+    /** Marks a recommended task done and refreshes the next pick. */
+    fun completeTask(taskId: Long) {
+        viewModelScope.launch {
+            runCatching { todoRepo.completeTodo(taskId) }
+            refreshBrain(force = true)
+        }
     }
 
     private suspend fun tick() {
@@ -244,6 +422,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _overdueCount.value = overdueCount
 
         reconcileStalePomodoro(now)
+        refreshBrain()
     }
 
     private suspend fun reconcileStalePomodoro(now: Long) {
@@ -276,7 +455,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _selectedDate.value = date
     }
 
-    fun startSession(title: String, categoryId: Long?) {
+    /**
+     * Starts a tracked session and the foreground timer service from a single
+     * start timestamp so the app, the widget and the notification all count the
+     * exact same instant.
+     */
+    fun startSession(
+        title: String,
+        categoryId: Long?,
+        autoDnd: Boolean = false,
+        source: String = "TIMER"
+    ) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             sessionRepo.stopActiveSession(now)
@@ -298,17 +487,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 type = sessionType,
                 startTime = now,
                 isActive = true,
-                source = "TIMER",
+                source = source,
                 timezoneId = ZoneId.systemDefault().id
             )
-            sessionRepo.insert(session)
+            val sessionId = sessionRepo.insert(session)
+
+            val state = TimerStateStore.TimerState(
+                isRunning = true,
+                startTime = now,
+                sessionId = sessionId,
+                title = session.title,
+                categoryName = category?.name ?: "",
+                categoryType = category?.type ?: "",
+                source = source,
+                autoDnd = autoDnd || TimerStateStore.isFocusType(category?.type)
+            )
+            val app = getApplication<Application>()
+            TimerStateStore.publish(app, state)
+            TimerStateStore.startTimerService(app, state)
         }
     }
 
+    /**
+     * Stops the running session everywhere at once: service, widget,
+     * notification, Do Not Disturb and the database.
+     */
     fun stopSession() {
+        val app = getApplication<Application>()
+        val current = TimerStateStore.load(app)
+        val sessionId = current.sessionId
+        val isPomodoro = current.isPomodoro
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            sessionRepo.stopActiveSession(now)
+            val accepted = TimerStateStore.requestStop(app, sessionId, isPomodoro)
+            // Close immediately so the UI reacts without waiting for the service.
+            if (sessionId >= 0L) {
+                sessionRepo.stopSessionById(sessionId)
+            } else {
+                sessionRepo.stopActiveSession(System.currentTimeMillis())
+            }
+            if (!accepted) {
+                FocusDndManager.restore(app)
+                TimerStateStore.clear(app)
+                runCatching { TimerWidgetProvider.updateWidgets(app) }
+            }
         }
     }
 
@@ -883,6 +1104,80 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             activeTodos = _activeTodoCount.value,
             averageProductivePerDay = totalProductive / 7
         )
+    }
+
+    private suspend fun calculateWeeklyReport() {
+        val zone = ZoneId.systemDefault()
+        val today = _selectedDate.value
+        val now = System.currentTimeMillis()
+        val cats = _categories.value
+        val report = LinkedHashMap<LocalDate, TimeCoverage>()
+        var productiveSeconds = 0L
+        var awakeSeconds = 0L
+
+        for (i in 6 downTo 0) {
+            val date = today.minusDays(i.toLong())
+            val (dayStart, dayEnd) = getDayRange(date, zone)
+            val sessions = sessionRepo.getSessionsForDaySync(dayStart, dayEnd)
+            val coverage = timeEngine.calculateCoverage(sessions, cats, date, zone, now = now)
+            report[date] = coverage
+            productiveSeconds += coverage.totalProductiveSeconds
+            awakeSeconds += (coverage.totalDaySeconds - coverage.sleepSeconds).coerceAtLeast(0L)
+        }
+
+        _weeklyReport.value = report
+        _productivityScore.value = if (awakeSeconds > 0) {
+            (productiveSeconds.toDouble() / awakeSeconds).coerceIn(0.0, 1.0).toFloat()
+        } else {
+            0f
+        }
+    }
+
+    fun addGoal(title: String, description: String, category: String, targetHours: Float) {
+        viewModelScope.launch {
+            runCatching {
+                goalRepo.insertGoal(
+                    GoalEntity(
+                        title = title,
+                        description = description,
+                        category = category,
+                        targetHours = targetHours
+                    )
+                )
+            }
+        }
+    }
+
+    fun updateGoalProgress(goalId: Long, hoursToAdd: Float) {
+        viewModelScope.launch { runCatching { goalRepo.updateGoalProgress(goalId, hoursToAdd) } }
+    }
+
+    fun deleteGoal(goal: GoalEntity) {
+        viewModelScope.launch { runCatching { goalRepo.deleteGoal(goal) } }
+    }
+
+    fun addReminder(title: String, message: String, type: String, hour: Int, minute: Int) {
+        viewModelScope.launch {
+            runCatching {
+                db.reminderDao().insertReminder(
+                    ReminderEntity(
+                        title = title,
+                        message = message,
+                        type = type,
+                        timeHour = hour,
+                        timeMinute = minute
+                    )
+                )
+            }
+        }
+    }
+
+    fun toggleReminder(id: Long, enabled: Boolean) {
+        viewModelScope.launch { runCatching { db.reminderDao().toggleReminder(id, enabled) } }
+    }
+
+    fun deleteReminder(reminder: ReminderEntity) {
+        viewModelScope.launch { runCatching { db.reminderDao().deleteReminder(reminder) } }
     }
 
     private suspend fun calculateDailyProductivity() {

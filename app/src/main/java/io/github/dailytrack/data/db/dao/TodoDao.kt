@@ -35,6 +35,9 @@ interface TodoDao {
     @Query("SELECT * FROM todos WHERE isCompleted = 1 ORDER BY completedAt DESC")
     fun getCompletedTodos(): Flow<List<TodoEntity>>
 
+    @Query("SELECT * FROM todos WHERE isCompleted = 1 AND completedAt >= :start ORDER BY completedAt DESC")
+    suspend fun getCompletedTodosSince(start: Long): List<TodoEntity>
+
     @Query("SELECT * FROM todos WHERE isCompleted = 0 AND categoryId = :categoryId ORDER BY priority DESC, deadline ASC")
     fun getActiveTodosByCategory(categoryId: Long): Flow<List<TodoEntity>>
 

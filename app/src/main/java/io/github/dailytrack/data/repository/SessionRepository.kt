@@ -53,4 +53,11 @@ class SessionRepository(private val sessionDao: SessionDao) {
         val active = sessionDao.getActiveSessionSync() ?: return
         sessionDao.update(active.copy(endTime = endTime, isActive = false, updatedAt = endTime))
     }
+
+    suspend fun stopSessionById(sessionId: Long, endTime: Long = System.currentTimeMillis()) {
+        sessionDao.stopSessionById(sessionId, endTime)
+    }
+
+    suspend fun getCompletedSessionsSince(start: Long): List<SessionEntity> =
+        sessionDao.getCompletedSessionsSince(start)
 }

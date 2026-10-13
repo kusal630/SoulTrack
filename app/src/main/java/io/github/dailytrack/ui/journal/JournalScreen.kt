@@ -17,105 +17,104 @@
 
 package io.github.dailytrack.ui.journal
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import io.github.dailytrack.ui.components.EmptyState
+import io.github.dailytrack.ui.components.PrimaryCta
+import io.github.dailytrack.ui.components.ScreenList
+import io.github.dailytrack.ui.components.ScreenSection
+import io.github.dailytrack.ui.components.SectionTitle
+import io.github.dailytrack.ui.theme.Dimens
+import io.github.dailytrack.ui.theme.LearningColor
+import io.github.dailytrack.ui.theme.SocialColor
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JournalScreen(navController: NavController) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Journal & Life Events") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+    var well by remember { mutableStateOf("") }
+    var drained by remember { mutableStateOf("") }
+    var learned by remember { mutableStateOf("") }
+    var improve by remember { mutableStateOf("") }
+
+    ScreenList(
+        title = "Journal",
+        subtitle = "Reflections and life events",
+        navController = navController
+    ) {
+        item {
+            ScreenSection(
+                title = "Daily reflection",
+                subtitle = "Four questions, one honest minute",
+                leadingIcon = Icons.Default.EditNote,
+                tint = LearningColor
+            ) {
+                OutlinedTextField(
+                    value = well,
+                    onValueChange = { well = it },
+                    label = { Text("What went well?") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(Dimens.CardGap))
+                OutlinedTextField(
+                    value = drained,
+                    onValueChange = { drained = it },
+                    label = { Text("What drained energy?") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(Dimens.CardGap))
+                OutlinedTextField(
+                    value = learned,
+                    onValueChange = { learned = it },
+                    label = { Text("What did I learn?") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(Dimens.CardGap))
+                OutlinedTextField(
+                    value = improve,
+                    onValueChange = { improve = it },
+                    label = { Text("What should I improve tomorrow?") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(Dimens.CardGap))
+                PrimaryCta(
+                    text = "Save reflection",
+                    icon = Icons.Default.Check,
+                    onClick = {}
+                )
+            }
+        }
+
+        item {
+            SectionTitle(
+                title = "Entries",
+                subtitle = "Reflections and life events, newest first",
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Daily Reflection", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = "",
-                            onValueChange = {},
-                            label = { Text("What went well?") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = "",
-                            onValueChange = {},
-                            label = { Text("What drained energy?") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = "",
-                            onValueChange = {},
-                            label = { Text("What did I learn?") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = "",
-                            onValueChange = {},
-                            label = { Text("What should I improve tomorrow?") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = {}, modifier = Modifier.fillMaxWidth()) {
-                            Text("Save Reflection")
-                        }
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Life Events", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No life events logged yet. Tap below to add your first event.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedButton(onClick = {}, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Add Life Event")
-                        }
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Life Timeline", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Your life timeline will appear here as you log events and milestones.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
+        item {
+            EmptyState(
+                title = "No entries yet",
+                message = "Saved reflections and life events show up here as a timeline you can look back on.",
+                icon = Icons.Default.EditNote,
+                tint = SocialColor,
+                actionLabel = "Write entry",
+                onAction = {}
+            )
         }
+        item { Spacer(modifier = Modifier.height(4.dp)) }
     }
 }

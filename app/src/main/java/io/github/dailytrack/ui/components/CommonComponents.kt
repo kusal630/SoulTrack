@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.dailytrack.ui.theme.GradientEnd
 import io.github.dailytrack.ui.theme.GradientMid
 import io.github.dailytrack.ui.theme.GradientStart
@@ -39,12 +40,11 @@ fun TimeBreakdownPieChart(
     val total = data.sumOf { it.value.toDouble() }.toFloat()
     if (total <= 0f) return
 
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    SurfaceCard(modifier = modifier) {
             Text(
                 text = "Time Distribution",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -86,7 +86,6 @@ fun TimeBreakdownPieChart(
                     }
                 }
             }
-        }
     }
 }
 
@@ -176,16 +175,7 @@ fun SectionCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            content()
-        }
-    }
+    ScreenSection(title = title, modifier = modifier) { content() }
 }
 
 @Composable
@@ -210,9 +200,11 @@ fun DatePickerField(
 fun SectionHeader(title: String, modifier: Modifier = Modifier) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = modifier.padding(vertical = 4.dp)
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 0.6.sp,
+        modifier = modifier.padding(top = 8.dp, bottom = 4.dp)
     )
 }
 
@@ -240,31 +232,6 @@ fun MedicalDisclaimerCard(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun EmptyState(
-    message: String,
-    modifier: Modifier = Modifier,
-    actionLabel: String? = null,
-    onAction: (() -> Unit)? = null
-) {
-    Column(
-        modifier = modifier.fillMaxWidth().padding(32.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        if (actionLabel != null && onAction != null) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = onAction) {
-                Text(actionLabel)
-            }
-        }
-    }
-}
-
-@Composable
 fun AnimatedGradientButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -287,7 +254,10 @@ fun AnimatedGradientButton(
         colors = if (enabled) {
             listOf(GradientStart, GradientMid, GradientEnd)
         } else {
-            listOf(Color.Gray, Color.Gray)
+            listOf(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+            )
         },
         start = Offset(0f, 0f),
         end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
@@ -344,9 +314,9 @@ fun ShimmerEffect(
     modifier: Modifier = Modifier
 ) {
     val shimmerColors = listOf(
-        Color.LightGray.copy(alpha = 0.6f),
-        Color.LightGray.copy(alpha = 0.2f),
-        Color.LightGray.copy(alpha = 0.6f)
+        MaterialTheme.colorScheme.surfaceContainerHigh,
+        MaterialTheme.colorScheme.surfaceContainerLow,
+        MaterialTheme.colorScheme.surfaceContainerHigh
     )
 
     val transition = rememberInfiniteTransition(label = "shimmer")
@@ -378,19 +348,5 @@ fun GlassCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
-        ),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            content = content
-        )
-    }
+    SurfaceCard(modifier = modifier, content = content)
 }

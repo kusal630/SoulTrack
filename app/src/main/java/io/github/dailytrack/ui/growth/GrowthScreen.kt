@@ -17,24 +17,45 @@
 
 package io.github.dailytrack.ui.growth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.engine.GrowthScoreResult
+import io.github.dailytrack.ui.Screen
+import io.github.dailytrack.ui.components.*
+import io.github.dailytrack.ui.navigateSingleTop
+import io.github.dailytrack.ui.theme.Dimens
+import io.github.dailytrack.ui.theme.ExerciseColor
+import io.github.dailytrack.ui.theme.LearningColor
+import io.github.dailytrack.ui.theme.NeutralColor
+import io.github.dailytrack.ui.theme.ProductiveColor
+import io.github.dailytrack.ui.theme.RecoveryColor
+import io.github.dailytrack.ui.theme.SleepColor
+import io.github.dailytrack.ui.theme.SocialColor
+import io.github.dailytrack.ui.theme.WastedColor
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+private data class GrowthDestination(
+    val label: String,
+    val caption: String,
+    val icon: ImageVector,
+    val route: String,
+    val tint: Color
+)
+
 @Composable
 fun GrowthScreen(
     navController: NavController,
@@ -45,48 +66,146 @@ fun GrowthScreen(
     val loopStatus by viewModel.loopStatus.collectAsState()
     val todayCoverage by viewModel.todayCoverage.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Growth & Routine") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+    ScreenList(
+        title = "Growth & Routine",
+        subtitle = "Balanced days, week after week",
+        navController = navController
+    ) {
+        item {
+            GrowthScoreDetailCard(score = growthScore, result = growthResult)
+        }
+
+        item {
+            GrowthComponentsCard(result = growthResult, coverage = todayCoverage)
+        }
+
+        item {
+            RoutineLoopCard(loopStatus = loopStatus)
+        }
+
+        item {
+            ComfortZoneCard(loopStatus = loopStatus)
+        }
+
+        item {
+            SectionTitle(
+                title = "Go deeper",
+                subtitle = "Body, goals, history and rewards",
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                GrowthScoreDetailCard(score = growthScore, result = growthResult)
-            }
 
-            item {
-                GrowthComponentsCard(result = growthResult, coverage = todayCoverage)
-            }
+        item {
+            GrowthDestinationGrid(navController = navController)
+        }
 
-            item {
-                RoutineLoopCard(loopStatus = loopStatus)
-            }
+        item {
+            PrimaryCta(
+                text = "Set goals & targets",
+                icon = Icons.Default.TrackChanges,
+                onClick = { navController.navigateSingleTop(Screen.Goals.route) }
+            )
+        }
 
-            item {
-                ComfortZoneCard(loopStatus = loopStatus)
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+    }
+}
+
+@Composable
+private fun GrowthDestinationGrid(navController: NavController) {
+    val destinations = listOf(
+        GrowthDestination(
+            "Body systems",
+            "How your body is doing",
+            Icons.Default.Favorite,
+            Screen.BodySystems.route,
+            SocialColor
+        ),
+        GrowthDestination(
+            "History",
+            "Every session you logged",
+            Icons.Default.History,
+            Screen.History.route,
+            LearningColor
+        ),
+        GrowthDestination(
+            "Analytics",
+            "Trends across weeks",
+            Icons.Default.BarChart,
+            Screen.Analytics.route,
+            RecoveryColor
+        ),
+        GrowthDestination(
+            "Achievements",
+            "Levels and unlocks",
+            Icons.Default.EmojiEvents,
+            Screen.Achievements.route,
+            ExerciseColor
+        )
+    )
+
+    Column(verticalArrangement = Arrangement.spacedBy(Dimens.CardGap)) {
+        destinations.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.CardGap)) {
+                row.forEach { destination ->
+                    GrowthDestinationTile(
+                        destination = destination,
+                        modifier = Modifier.weight(1f),
+                        onClick = { navController.navigateSingleTop(destination.route) }
+                    )
+                }
+                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
+private fun GrowthDestinationTile(
+    destination: GrowthDestination,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    PressableCard(
+        modifier = modifier,
+        onClick = onClick
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(destination.tint.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                destination.icon,
+                contentDescription = null,
+                tint = destination.tint,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = destination.label,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = destination.caption,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
 fun GrowthScoreDetailCard(score: Double, result: GrowthScoreResult?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    SurfaceCard {
+        Column {
             Text(
                 "Growth Score",
                 style = MaterialTheme.typography.titleMedium,
@@ -97,9 +216,9 @@ fun GrowthScoreDetailCard(score: Double, result: GrowthScoreResult?) {
                 "${score.toInt()}",
                 style = MaterialTheme.typography.displaySmall,
                 color = when {
-                    score >= 70 -> Color(0xFF2E7D32)
-                    score >= 40 -> Color(0xFFF57C00)
-                    else -> Color(0xFFC62828)
+                    score >= 70 -> ProductiveColor
+                    score >= 40 -> ExerciseColor
+                    else -> WastedColor
                 },
                 fontWeight = FontWeight.Bold
             )
@@ -117,7 +236,7 @@ fun GrowthScoreDetailCard(score: Double, result: GrowthScoreResult?) {
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
+            Hairline()
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
@@ -133,22 +252,22 @@ fun GrowthScoreDetailCard(score: Double, result: GrowthScoreResult?) {
             )
             Spacer(modifier = Modifier.height(4.dp))
 
-            ScoreGuideRow("25%", "Learning", "Target: 2h/day", Color(0xFF1565C0))
-            ScoreGuideRow("25%", "Productive Work", "Target: 4h/day", Color(0xFF2E7D32))
-            ScoreGuideRow("20%", "Exercise", "Target: 1h/day", Color(0xFFE65100))
-            ScoreGuideRow("15%", "Sleep", "Target: 7-9h", Color(0xFF311B92))
-            ScoreGuideRow("5%", "Social", "Target: 30min/day", Color(0xFF6A1B9A))
-            ScoreGuideRow("5%", "Novelty", "Trying new things", Color(0xFF00838F))
-            ScoreGuideRow("5%", "Consistency", "Active streak (7 days)", Color(0xFF4E342E))
+            ScoreGuideRow("25%", "Learning", "Target: 2h/day", LearningColor)
+            ScoreGuideRow("25%", "Productive Work", "Target: 4h/day", ProductiveColor)
+            ScoreGuideRow("20%", "Exercise", "Target: 1h/day", ExerciseColor)
+            ScoreGuideRow("15%", "Sleep", "Target: 7-9h", SleepColor)
+            ScoreGuideRow("5%", "Social", "Target: 30min/day", SocialColor)
+            ScoreGuideRow("5%", "Novelty", "Trying new things", RecoveryColor)
+            ScoreGuideRow("5%", "Consistency", "Active streak (7 days)", NeutralColor)
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                )
+            SurfaceCard(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                border = null,
+                contentPadding = PaddingValues(10.dp)
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
+                Column {
                     Text(
                         "Scoring Guide",
                         style = MaterialTheme.typography.labelMedium,
@@ -182,11 +301,11 @@ fun ScoreGuideRow(percentage: String, label: String, target: String, color: Colo
     ) {
         Surface(
             color = color.copy(alpha = 0.15f),
-            shape = MaterialTheme.shapes.extraSmall
+            shape = MaterialTheme.shapes.small
         ) {
             Text(
                 text = percentage,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = color,
                 fontWeight = FontWeight.Bold
@@ -208,8 +327,8 @@ fun ScoreGuideRow(percentage: String, label: String, target: String, color: Colo
 
 @Composable
 fun GrowthComponentsCard(result: GrowthScoreResult?, coverage: io.github.dailytrack.engine.TimeCoverage?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    SurfaceCard {
+        Column {
             Text(
                 "Today's Breakdown",
                 style = MaterialTheme.typography.titleMedium,
@@ -221,49 +340,49 @@ fun GrowthComponentsCard(result: GrowthScoreResult?, coverage: io.github.dailytr
                 formatMinutes(coverage?.learningSeconds ?: 0),
                 "2h target",
                 result?.learningComponent ?: 0.0,
-                Color(0xFF1565C0)
+                LearningColor
             )
             GrowthComponentRow(
                 "Productive",
                 formatMinutes(coverage?.productiveSeconds ?: 0),
                 "4h target",
                 result?.productiveComponent ?: 0.0,
-                Color(0xFF2E7D32)
+                ProductiveColor
             )
             GrowthComponentRow(
                 "Exercise",
                 formatMinutes(coverage?.exerciseSeconds ?: 0),
                 "1h target",
                 result?.exerciseComponent ?: 0.0,
-                Color(0xFFE65100)
+                ExerciseColor
             )
             GrowthComponentRow(
                 "Sleep",
                 formatHoursMinutes(coverage?.sleepSeconds ?: 0),
                 "7-9h target",
                 result?.sleepComponent ?: 0.0,
-                Color(0xFF311B92)
+                SleepColor
             )
             GrowthComponentRow(
                 "Social",
                 formatMinutes(coverage?.socialSeconds ?: 0),
                 "30m target",
                 result?.socialComponent ?: 0.0,
-                Color(0xFF6A1B9A)
+                SocialColor
             )
             GrowthComponentRow(
                 "Novelty",
                 "--",
                 "Variety",
                 result?.noveltyComponent ?: 0.0,
-                Color(0xFF00838F)
+                RecoveryColor
             )
             GrowthComponentRow(
                 "Consistency",
                 "${((result?.consistencyComponent ?: 0.0) / 5.0 * 7).toInt()}/7 days",
                 "Streak",
                 result?.consistencyComponent ?: 0.0,
-                Color(0xFF4E342E)
+                NeutralColor
             )
         }
     }
@@ -279,7 +398,7 @@ fun GrowthComponentRow(label: String, value: String, target: String, score: Doub
     ) {
         Surface(
             color = color.copy(alpha = 0.15f),
-            shape = MaterialTheme.shapes.extraSmall
+            shape = MaterialTheme.shapes.small
         ) {
             Text(
                 text = "${score.toInt()}",
@@ -303,8 +422,8 @@ fun GrowthComponentRow(label: String, value: String, target: String, score: Doub
 
 @Composable
 fun RoutineLoopCard(loopStatus: io.github.dailytrack.engine.LoopDetectionResult?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    SurfaceCard {
+        Column {
             Text(
                 "Routine Loop Detection",
                 style = MaterialTheme.typography.titleMedium,
@@ -335,8 +454,8 @@ fun RoutineLoopCard(loopStatus: io.github.dailytrack.engine.LoopDetectionResult?
 
 @Composable
 fun ComfortZoneCard(loopStatus: io.github.dailytrack.engine.LoopDetectionResult?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    SurfaceCard {
+        Column {
             Text(
                 "Comfort Zone Warnings",
                 style = MaterialTheme.typography.titleMedium,

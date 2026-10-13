@@ -22,17 +22,19 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import android.os.Build
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,6 +42,19 @@ import androidx.navigation.NavController
 import io.github.dailytrack.SoulTrackApp
 import io.github.dailytrack.data.api.QuotesApi
 import io.github.dailytrack.ui.Screen
+import io.github.dailytrack.service.FocusDndManager
+import io.github.dailytrack.service.FocusSettings
+import io.github.dailytrack.service.NoiseMonitor
+import io.github.dailytrack.ui.components.GhostCta
+import io.github.dailytrack.ui.components.PillChip
+import io.github.dailytrack.ui.components.PrimaryCta
+import io.github.dailytrack.ui.components.ScreenList
+import io.github.dailytrack.ui.components.ScreenSection
+import io.github.dailytrack.ui.components.SectionTitle
+import io.github.dailytrack.ui.theme.Dimens
+import io.github.dailytrack.ui.theme.ThemeMode
+import io.github.dailytrack.ui.theme.ThemeSettings
+import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -87,294 +102,346 @@ fun SettingsScreen(navController: NavController) {
         }
     }
 
-    Scaffold(
-        topBar = {
-            LargeTopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+    ScreenList(
+        title = "Settings",
+        subtitle = "Tune Soul Track to your day",
+        navController = navController
+    ) {
+        item {
+            SectionTitle(
+                title = "Discover",
+                subtitle = "Everything beyond the timer",
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 8.dp)
-        ) {
-            item {
-                SettingsSection(title = "Targets", icon = Icons.Default.Flag) {
-                    TargetInput("Productive minutes/day", productiveMinutes) { productiveMinutes = it }
-                    TargetInput("Learning minutes/day", learningMinutes) { learningMinutes = it }
-                    TargetInput("Exercise minutes/day", exerciseMinutes) { exerciseMinutes = it }
-                    TargetInput("Sleep target (hours)", sleepTarget) { sleepTarget = it }
-                }
-            }
 
-            item {
-                SettingsSection(title = "Privacy", icon = Icons.Default.Shield) {
-                    PrivacySwitch("Maintenance mode", Icons.Default.Pause, maintenanceMode) { maintenanceMode = it }
-                }
+        item {
+            SettingsSection(title = "Explore", icon = Icons.Default.Explore) {
+                Text(
+                    "Sleep, exercise, nutrition, body, journal, goals, reminders, history, analytics, reports and achievements.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                PrimaryCta(
+                    text = "Open Explore",
+                    icon = Icons.Default.Explore,
+                    onClick = { navController.navigate(Screen.Explore.route) }
+                )
             }
+        }
 
-            item {
-                var selectedTheme by remember { mutableStateOf("SYSTEM") }
-                val themes = listOf("LIGHT", "DARK", "AMOLED", "SYSTEM")
-                
-                SettingsSection(title = "Appearance", icon = Icons.Default.Palette) {
-                    Text(
-                        "Theme",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        themes.forEach { theme ->
-                            FilterChip(
-                                selected = selectedTheme == theme,
-                                onClick = { selectedTheme = theme },
-                                label = { Text(theme.lowercase().replaceFirstChar { it.uppercase() }) }
-                            )
-                        }
+        item {
+            SectionTitle(
+                title = "Preferences",
+                subtitle = "Targets, privacy, focus and look",
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        item {
+            SettingsSection(title = "Targets", icon = Icons.Default.Flag) {
+                TargetInput("Productive minutes/day", productiveMinutes) { productiveMinutes = it }
+                TargetInput("Learning minutes/day", learningMinutes) { learningMinutes = it }
+                TargetInput("Exercise minutes/day", exerciseMinutes) { exerciseMinutes = it }
+                TargetInput("Sleep target (hours)", sleepTarget) { sleepTarget = it }
+            }
+        }
+
+        item {
+            SettingsSection(title = "Privacy", icon = Icons.Default.Shield) {
+                PrivacySwitch("Maintenance mode", Icons.Default.Pause, maintenanceMode) { maintenanceMode = it }
+            }
+        }
+
+        item {
+            SettingsSection(title = "Focus & Permissions", icon = Icons.Default.NotificationsOff) {
+                FocusPermissionSection()
+            }
+        }
+
+        item {
+            val modes = listOf(ThemeMode.AMOLED, ThemeMode.SOFT_DARK, ThemeMode.LIGHT, ThemeMode.SYSTEM)
+            val currentMode = ThemeSettings.mode
+            val dynamic = ThemeSettings.dynamicColor
+
+            SettingsSection(title = "Appearance", icon = Icons.Default.Palette) {
+                Text(
+                    "Theme",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    modes.forEach { mode ->
+                        PillChip(
+                            label = when (mode) {
+                                ThemeMode.AMOLED -> "AMOLED"
+                                ThemeMode.SOFT_DARK -> "Soft dark"
+                                ThemeMode.LIGHT -> "Light"
+                                ThemeMode.SYSTEM -> "System"
+                            },
+                            selected = currentMode == mode,
+                            onClick = { ThemeSettings.setMode(mode, context) },
+                            modifier = Modifier.height(48.dp)
+                        )
                     }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "AMOLED is pure black, soft dark is #0E0E13. Both keep the mint ring accents.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Select your preferred theme. AMOLED saves battery on OLED screens.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    PrivacySwitch(
+                        "Dynamic colour",
+                        Icons.Default.Palette,
+                        dynamic
+                    ) { ThemeSettings.setDynamicColor(it, context) }
                 }
             }
+        }
 
-            item {
-                SettingsSection(title = "Sync", icon = Icons.Default.Sync) {
-                    val app = context.applicationContext as SoulTrackApp
-                    val syncUiState by app.syncManager.uiState.collectAsState()
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Offline Device Sync", fontWeight = FontWeight.Medium)
-                            Text(
-                                if (syncUiState.isEnabled) "Syncing via Syncthing"
-                                else "Disabled",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (syncUiState.isEnabled) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ActionButton("Sync Settings", Icons.Default.Sync) {
-                        navController.navigate(Screen.SyncSettings.route)
-                    }
-                }
+        item {
+            val wasting = ThemeSettings.wastingThreshold
+            val productive = ThemeSettings.productiveThreshold
+
+            SettingsSection(title = "Day ring", icon = Icons.Default.DonutSmall) {
+                Text(
+                    "The outer ring writes a colour into each day. These two numbers decide which one.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                ThresholdSlider(
+                    label = "Wasting time above",
+                    value = wasting,
+                    valueLabel = "${(wasting * 100).toInt()}% distracted",
+                    valueRange = 0.05f..0.60f
+                ) { ThemeSettings.setWastingThreshold(it, context) }
+                ThresholdSlider(
+                    label = "Not productive below",
+                    value = productive,
+                    valueLabel = "${(productive * 100).toInt()}% of planned focus",
+                    valueRange = 0.10f..0.90f
+                ) { ThemeSettings.setProductiveThreshold(it, context) }
             }
+        }
 
-            item {
-                SettingsSection(title = "Quotes", icon = Icons.Default.FormatQuote) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Online Quotes API", fontWeight = FontWeight.Medium)
-                            Text(
-                                "Fetch quotes from the internet for more variety",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = apiQuotesEnabled,
-                            onCheckedChange = { enabled ->
-                                apiQuotesEnabled = enabled
-                                QuotesApi.setApiEnabled(enabled)
-                                if (enabled) {
-                                    scope.launch {
-                                        val fetched = QuotesApi.fetchOnlineQuotes()
-                                        if (fetched.isNotEmpty()) {
-                                            Toast.makeText(context, "Fetched ${fetched.size} online quotes", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            Toast.makeText(context, "Failed to fetch quotes. Check your connection.", Toast.LENGTH_SHORT).show()
-                                            apiQuotesEnabled = false
-                                            QuotesApi.setApiEnabled(false)
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Offline: ${QuotesApi.getOfflineQuotesCount()} quotes | Total: ${QuotesApi.getTotalQuotesCount()} quotes",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+        item {
+            SectionTitle(
+                title = "Data & connections",
+                subtitle = "Sync, quotes, tracking and alerts",
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
 
-            item {
-                SettingsSection(title = "Time Tracking", icon = Icons.Default.Timer) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Strict Waste Mode", fontWeight = FontWeight.Medium)
-                            Text(
-                                "Treat all non-productive, non-break time as waste",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = wasteModeEnabled,
-                            onCheckedChange = { wasteModeEnabled = it }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "When enabled, any time tracked outside of 'Productive'/'Learning' categories and breaks is flagged as wasted time in reports.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            item {
-                SettingsSection(title = "Data", icon = Icons.Default.Storage) {
-                    ActionButton("Export Data", Icons.Default.FileDownload) {
-                        exportLauncher.launch("soultrack_export.json")
-                    }
-                    ActionButton("Import Data", Icons.Default.FileUpload) {
-                        importLauncher.launch(arrayOf("application/json"))
-                    }
-                }
-            }
-
-            item {
-                SettingsSection(title = "Notifications", icon = Icons.Default.Notifications) {
-                    NotificationSwitch("Timer notification", true)
-                    NotificationSwitch("Learning reminder", false)
-                    NotificationSwitch("Sleep wind-down", false)
-                    NotificationSwitch("Insight notifications", false)
-                }
-            }
-
-            item {
-                SettingsSection(title = "About", icon = Icons.Default.Info) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Soul Track", fontWeight = FontWeight.Medium)
-                            Text(
-                                "v${io.github.dailytrack.BuildConfig.VERSION_NAME}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+        item {
+            SettingsSection(title = "Sync", icon = Icons.Default.Sync) {
+                val app = context.applicationContext as SoulTrackApp
+                val syncUiState by app.syncManager.uiState.collectAsState()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Offline Device Sync", fontWeight = FontWeight.Medium)
                         Text(
-                            "Offline-first, privacy-first",
+                            if (syncUiState.isEnabled) "Syncing via Syncthing"
+                            else "Disabled",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (syncUiState.isEnabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ActionButton("Sync Settings", Icons.Default.Sync) {
+                    navController.navigate(Screen.SyncSettings.route)
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "Quotes", icon = Icons.Default.FormatQuote) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Online Quotes API", fontWeight = FontWeight.Medium)
+                        Text(
+                            "Downloads public quotes automatically (every 3 days or when running low). Sends nothing from your device.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    ActionButton("View Licenses", Icons.Default.Description) {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/kusal630/TIme-tracker/blob/master/LICENSE"))
-                        context.startActivity(intent)
-                    }
-                    ActionButton("GitHub Repository", Icons.Default.Code) {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/kusal630/TIme-tracker"))
-                        context.startActivity(intent)
-                    }
-                }
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    Switch(
+                        checked = apiQuotesEnabled,
+                        onCheckedChange = { enabled ->
+                            apiQuotesEnabled = enabled
+                            QuotesApi.setApiEnabled(enabled)
+                            if (enabled) {
+                                scope.launch {
+                                    val fetched = QuotesApi.fetchOnlineQuotes()
+                                    if (fetched.isNotEmpty()) {
+                                        Toast.makeText(context, "Fetched ${fetched.size} online quotes", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Failed to fetch quotes. Check your connection.", Toast.LENGTH_SHORT).show()
+                                        apiQuotesEnabled = false
+                                        QuotesApi.setApiEnabled(false)
+                                    }
+                                }
+                            }
+                        }
                     )
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Favorite,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Support the Developer",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Text(
-                            text = "\"The best way to find yourself is to lose yourself in the service of others.\"",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        Text(
-                            text = "— Mahatma Gandhi",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
-                        OutlinedButton(
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://buymeacoffee.com/kusal630"))
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Coffee, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Buy Me a Coffee")
-                        }
-                    }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Offline: ${QuotesApi.getOfflineQuotesCount()} quotes | Total: ${QuotesApi.getTotalQuotesCount()} quotes",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+        }
 
-            item {
-                SettingsSection(title = "Danger Zone", icon = Icons.Default.DeleteForever) {
-                    ActionButton("Delete All Data", Icons.Default.Delete, isDestructive = true) {
-                        showDeleteAllDialog = true
+        item {
+            SettingsSection(title = "Time Tracking", icon = Icons.Default.Timer) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Strict Waste Mode", fontWeight = FontWeight.Medium)
+                        Text(
+                            "Treat all non-productive, non-break time as waste",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
+                    Switch(
+                        checked = wasteModeEnabled,
+                        onCheckedChange = { wasteModeEnabled = it }
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "When enabled, any time tracked outside of 'Productive'/'Learning' categories and breaks is flagged as wasted time in reports.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        item {
+            SettingsSection(title = "Data", icon = Icons.Default.Storage) {
+                ActionButton("Export Data", Icons.Default.FileDownload) {
+                    exportLauncher.launch("soultrack_export.json")
+                }
+                ActionButton("Import Data", Icons.Default.FileUpload) {
+                    importLauncher.launch(arrayOf("application/json"))
                 }
             }
         }
+
+        item {
+            SettingsSection(title = "Notifications", icon = Icons.Default.Notifications) {
+                NotificationSwitch("Timer notification", true)
+                NotificationSwitch("Learning reminder", false)
+                NotificationSwitch("Sleep wind-down", false)
+                NotificationSwitch("Insight notifications", false)
+            }
+        }
+
+        item {
+            SectionTitle(
+                title = "About",
+                subtitle = "Version, credits and support",
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        item {
+            SettingsSection(title = "About", icon = Icons.Default.Info) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Soul Track", fontWeight = FontWeight.Medium)
+                        Text(
+                            "v${io.github.dailytrack.BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        "Offline-first, privacy-first",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                ActionButton("View Licenses", Icons.Default.Description) {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/kusal630/TIme-tracker/blob/master/LICENSE"))
+                    context.startActivity(intent)
+                }
+                ActionButton("GitHub Repository", Icons.Default.Code) {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/kusal630/TIme-tracker"))
+                    context.startActivity(intent)
+                }
+            }
+        }
+
+        item {
+            ScreenSection(title = "Support the Developer", leadingIcon = Icons.Default.Favorite) {
+                Text(
+                    text = "\"The best way to find yourself is to lose yourself in the service of others.\"",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "— Mahatma Gandhi",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                GhostCta(
+                    text = "Buy Me a Coffee",
+                    icon = Icons.Default.Coffee,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://buymeacoffee.com/kusal630"))
+                        context.startActivity(intent)
+                    }
+                )
+            }
+        }
+
+        item {
+            SettingsSection(title = "Danger Zone", icon = Icons.Default.DeleteForever) {
+                ActionButton("Delete All Data", Icons.Default.Delete, isDestructive = true) {
+                    showDeleteAllDialog = true
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(8.dp)) }
     }
 
     if (showDeleteAllDialog) {
@@ -415,49 +482,33 @@ fun SettingsScreen(navController: NavController) {
                             Toast.makeText(context, "All data deleted", Toast.LENGTH_SHORT).show()
                         }
                     },
+                    shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) { Text("Delete Everything") }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteAllDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteAllDialog = false }, shape = RoundedCornerShape(50)) {
+                    Text("Cancel")
+                }
             }
         )
     }
 }
 
+/** A titled settings block: same card language as [ScreenSection] everywhere else. */
 @Composable
 fun SettingsSection(
     title: String,
     icon: ImageVector,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 12.dp)
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            content()
-        }
-    }
+    ScreenSection(
+        title = title,
+        leadingIcon = icon,
+        content = content
+    )
 }
 
 @Composable
@@ -471,6 +522,173 @@ fun TargetInput(label: String, value: String, onValueChange: (String) -> Unit) {
             .padding(vertical = 4.dp),
         singleLine = true
     )
+}
+
+
+@Composable
+private fun FocusPermissionSection() {
+    val context = LocalContext.current
+    var autoDnd by remember { mutableStateOf(FocusSettings.isAutoDndEnabled(context)) }
+    var noiseEnabled by remember { mutableStateOf(FocusSettings.isNoiseSensingEnabled(context)) }
+    var recommendationsEnabled by remember { mutableStateOf(FocusSettings.isRecommendationsEnabled(context)) }
+    var dndGranted by remember { mutableStateOf(FocusDndManager.hasAccess(context)) }
+    var micGranted by remember { mutableStateOf(NoiseMonitor.hasPermission(context)) }
+
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                dndGranted = FocusDndManager.hasAccess(context)
+                micGranted = NoiseMonitor.hasPermission(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val dndLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { dndGranted = FocusDndManager.hasAccess(context) }
+
+    val micLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        micGranted = granted
+        if (granted) {
+            FocusSettings.setNoiseSensingEnabled(context, true)
+            noiseEnabled = true
+            if (io.github.dailytrack.service.TimerStateStore.load(context).isRunning) {
+                NoiseMonitor.start(context)
+            }
+        } else {
+            FocusSettings.setNoiseSensingEnabled(context, false)
+            noiseEnabled = false
+            NoiseMonitor.stop()
+        }
+    }
+
+    PermissionToggle(
+        title = "Auto Do Not Disturb",
+        description = "Silence notifications automatically during Productive and Learning sessions and deep-focus task picks.",
+        checked = autoDnd,
+        granted = dndGranted,
+        grantedLabel = "Permission granted",
+        missingLabel = "Tap to allow Do Not Disturb access",
+        onCheckedChange = { enabled ->
+            autoDnd = enabled
+            FocusSettings.setAutoDndEnabled(context, enabled)
+            if (enabled && !dndGranted) dndLauncher.launch(FocusDndManager.settingsIntent())
+        }
+    )
+
+    PermissionToggle(
+        title = "Ambient noise sensing",
+        description = "Reads how quiet the room is while a focus session runs. Audio is never recorded, saved or sent anywhere - only a quietness score is kept for 5 minutes.",
+        checked = noiseEnabled,
+        granted = micGranted,
+        grantedLabel = "Microphone available",
+        missingLabel = "Tap to grant microphone access",
+        onCheckedChange = { enabled ->
+            if (enabled && !micGranted) {
+                micLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            } else {
+                noiseEnabled = enabled
+                FocusSettings.setNoiseSensingEnabled(context, enabled)
+                if (enabled && io.github.dailytrack.service.TimerStateStore.load(context).isRunning) {
+                    NoiseMonitor.start(context)
+                } else if (!enabled) {
+                    NoiseMonitor.stop()
+                }
+            }
+        }
+    )
+
+    PermissionToggle(
+        title = "Task recommendations",
+        description = "Suggests which task fits this moment, using your own history, deadlines and focus. Runs entirely on the device.",
+        checked = recommendationsEnabled,
+        granted = true,
+        grantedLabel = "On device only",
+        missingLabel = "",
+        onCheckedChange = { enabled ->
+            recommendationsEnabled = enabled
+            FocusSettings.setRecommendationsEnabled(context, enabled)
+        }
+    )
+}
+
+@Composable
+private fun PermissionToggle(
+    title: String,
+    description: String,
+    checked: Boolean,
+    granted: Boolean,
+    grantedLabel: String,
+    missingLabel: String,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.Medium)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!granted && missingLabel.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    missingLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else if (granted && grantedLabel.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    grantedLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun ThresholdSlider(
+    label: String,
+    value: Float,
+    valueLabel: String,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, style = MaterialTheme.typography.titleSmall)
+            Text(
+                text = valueLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
 }
 
 @Composable
@@ -522,19 +740,29 @@ fun NotificationSwitch(label: String, checked: Boolean) {
     }
 }
 
+/** Outlined pill row action - 52dp tall so it is comfortably tappable. */
 @Composable
 fun ActionButton(label: String, icon: ImageVector, isDestructive: Boolean = false, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        colors = if (isDestructive) ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.error
-        ) else ButtonDefaults.outlinedButtonColors()
+            .padding(vertical = 4.dp)
+            .height(Dimens.ButtonHeight),
+        shape = RoundedCornerShape(50),
+        border = BorderStroke(
+            1.dp,
+            if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+            else MaterialTheme.colorScheme.outlineVariant
+        ),
+        colors = if (isDestructive) {
+            ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+        } else {
+            ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(8.dp))
-        Text(label)
+        Text(label, style = MaterialTheme.typography.titleSmall)
     }
 }

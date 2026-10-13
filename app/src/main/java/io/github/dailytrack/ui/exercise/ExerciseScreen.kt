@@ -17,94 +17,130 @@
 
 package io.github.dailytrack.ui.exercise
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import io.github.dailytrack.ui.components.EmptyState
+import io.github.dailytrack.ui.components.PrimaryCta
+import io.github.dailytrack.ui.components.ScreenList
+import io.github.dailytrack.ui.components.ScreenSection
+import io.github.dailytrack.ui.components.SectionTitle
+import io.github.dailytrack.ui.components.StatTile
+import io.github.dailytrack.ui.theme.Dimens
+import io.github.dailytrack.ui.theme.ExerciseColor
+import io.github.dailytrack.ui.theme.RecoveryColor
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseScreen(navController: NavController) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Exercise & Movement") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+    var activity by remember { mutableStateOf("") }
+    var duration by remember { mutableStateOf("") }
+    var intensity by remember { mutableStateOf("") }
+
+    ScreenList(
+        title = "Exercise & movement",
+        subtitle = "Workouts, minutes and strain",
+        navController = navController
+    ) {
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.CardGap)) {
+                StatTile(
+                    label = "Today",
+                    value = "0 min",
+                    icon = Icons.Default.DirectionsRun,
+                    tint = ExerciseColor,
+                    caption = "No workout yet",
+                    modifier = Modifier.weight(1f)
+                )
+                StatTile(
+                    label = "Sessions",
+                    value = "0",
+                    icon = Icons.Default.FitnessCenter,
+                    tint = RecoveryColor,
+                    caption = "This week",
+                    progress = 0f,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            ScreenSection(
+                title = "Log exercise",
+                subtitle = "What you did, for how long, how hard",
+                leadingIcon = Icons.Default.FitnessCenter,
+                tint = ExerciseColor
+            ) {
+                OutlinedTextField(
+                    value = activity,
+                    onValueChange = { activity = it },
+                    label = { Text("Activity type") },
+                    placeholder = { Text("Running") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(Dimens.CardGap))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.CardGap)
+                ) {
+                    OutlinedTextField(
+                        value = duration,
+                        onValueChange = { duration = it },
+                        label = { Text("Duration (minutes)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = intensity,
+                        onValueChange = { intensity = it },
+                        label = { Text("Intensity") },
+                        placeholder = { Text("Moderate") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
+                Spacer(modifier = Modifier.height(Dimens.CardGap))
+                PrimaryCta(
+                    text = "Log exercise",
+                    icon = Icons.Default.Add,
+                    onClick = {}
+                )
+            }
+        }
+
+        item {
+            SectionTitle(
+                title = "History",
+                subtitle = "Your recent sessions",
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Today's Movement", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("0 minutes", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("No exercise logged today", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Log Exercise", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = "",
-                            onValueChange = {},
-                            label = { Text("Activity type") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = "",
-                                onValueChange = {},
-                                label = { Text("Duration (minutes)") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = "",
-                                onValueChange = {},
-                                label = { Text("Intensity") },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = {}, modifier = Modifier.fillMaxWidth()) {
-                            Text("Log Exercise")
-                        }
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Exercise History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No exercise entries yet. Start tracking to see your history.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
+        item {
+            EmptyState(
+                title = "No workouts logged yet",
+                message = "Log a session above and it lands here with its duration, intensity and contribution to today's movement.",
+                icon = Icons.Default.History,
+                tint = ExerciseColor
+            )
         }
+        item { Spacer(modifier = Modifier.height(4.dp)) }
     }
 }

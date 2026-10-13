@@ -38,6 +38,7 @@ class TimerForegroundService : Service() {
     private var sessionTitle: String = ""
     private var categoryName: String = ""
     private var categoryType: String = ""
+    private var sessionId: Long = -1L
     private var sedentaryJob: Job? = null
     private var sedentaryReminderCount: Int = 0
     private var isPomodoroSession: Boolean = false
@@ -45,6 +46,8 @@ class TimerForegroundService : Service() {
     private var breakReminderJob: Job? = null
     private var notificationManager: NotificationManager? = null
     private var timerJob: Job? = null
+    private var autoDnd: Boolean = false
+    private var autoDndRequested: Boolean = false
 
     companion object {
         const val CHANNEL_ID = "soultrack_timer"
@@ -57,6 +60,9 @@ class TimerForegroundService : Service() {
         const val EXTRA_CATEGORY = "category"
         const val EXTRA_CATEGORY_TYPE = "category_type"
         const val EXTRA_IS_POMODORO = "is_pomodoro"
+        const val EXTRA_AUTO_DND = "auto_dnd"
+        const val EXTRA_SESSION_ID = "session_id"
+        const val ACTION_DND_CHANGED = "io.github.dailytrack.ACTION_DND_CHANGED"
 
         fun getCategoryColor(type: String, isWaste: Boolean = false): Int {
             if (isWaste) return 0xFFF44336.toInt()
@@ -83,59 +89,59 @@ class TimerForegroundService : Service() {
                 else -> "Activity"
             }
         }
+
+        val DND_TYPES = listOf("PRODUCTIVE", "LEARNING")
     }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         notificationManager = getSystemService(NotificationManager::class.java)
+        TimerStateStore.markServiceAlive(true)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                timerJob?.cancel()
-                sedentaryJob?.cancel()
-                wastedWarningJob?.cancel()
-                breakReminderJob?.cancel()
-                val prefs = getSharedPreferences("widget_prefs", MODE_PRIVATE)
-                prefs.edit().putBoolean("is_running", false).putLong("session_id", -1L).apply()
-                closeActiveSession()
-                if (isPomodoroSession) {
-                    val stopPomodoro = Intent(this, PomodoroForegroundService::class.java)
-                        .setAction(PomodoroForegroundService.ACTION_STOP)
-                    runCatching { startService(stopPomodoro) }
-                }
-                notificationManager?.cancel(NOTIFICATION_ID)
-                notificationManager?.cancel(SEDENTARY_NOTIFICATION_ID)
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                TimerWidgetProvider.updateWidgets(this)
+                stopEverything(
+                    targetSessionId = intent.getLongExtra(EXTRA_SESSION_ID, -1L),
+                    stopPomodoro = intent.getBooleanExtra(EXTRA_IS_POMODORO, false)
+                )
                 return START_NOT_STICKY
             }
         }
 
-        val prefs = getSharedPreferences("widget_prefs", MODE_PRIVATE)
+        val stored = TimerStateStore.load(this)
         if (intent == null) {
-            startTime = prefs.getLong("start_time", 0L).takeIf { it > 0L } ?: System.currentTimeMillis()
-            sessionTitle = prefs.getString("session_name", null) ?: "Active Session"
-            categoryName = prefs.getString("category_name", "") ?: ""
-            categoryType = prefs.getString("category_type", "") ?: ""
+            startTime = stored.startTime.takeIf { it > 0L } ?: System.currentTimeMillis()
+            sessionTitle = stored.title.ifBlank { "Active Session" }
+            categoryName = stored.categoryName
+            categoryType = stored.categoryType
+            sessionId = stored.sessionId
+            isPomodoroSession = stored.isPomodoro
+            autoDndRequested = stored.autoDnd
         } else {
             startTime = intent.getLongExtra(EXTRA_START_TIME, System.currentTimeMillis())
             sessionTitle = intent.getStringExtra(EXTRA_TITLE) ?: "Active Session"
             categoryName = intent.getStringExtra(EXTRA_CATEGORY) ?: ""
             categoryType = intent.getStringExtra(EXTRA_CATEGORY_TYPE) ?: ""
-            isPomodoroSession = intent.getBooleanExtra(EXTRA_IS_POMODORO, false)
+            sessionId = intent.getLongExtra(EXTRA_SESSION_ID, stored.sessionId)
+            isPomodoroSession = intent.getBooleanExtra(EXTRA_IS_POMODORO, stored.isPomodoro)
+            autoDndRequested = intent.getBooleanExtra(EXTRA_AUTO_DND, stored.autoDnd)
         }
 
-        prefs.edit()
-            .putBoolean("is_running", true)
-            .putLong("start_time", startTime)
-            .putString("session_name", sessionTitle)
-            .putString("category_name", categoryName)
-            .putString("category_type", categoryType)
-            .apply()
+        val state = TimerStateStore.TimerState(
+            isRunning = true,
+            startTime = startTime,
+            sessionId = sessionId,
+            title = sessionTitle,
+            categoryName = categoryName,
+            categoryType = categoryType,
+            source = stored.source,
+            isPomodoro = isPomodoroSession,
+            autoDnd = autoDndRequested
+        )
+        TimerStateStore.publish(this, state)
 
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -143,6 +149,15 @@ class TimerForegroundService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+
+        autoDnd = (autoDndRequested || categoryType in DND_TYPES) &&
+            FocusSettings.isAutoDndEnabled(this)
+        if (autoDnd && FocusDndManager.hasAccess(this)) {
+            FocusDndManager.enable(this)
+            notifyDndChanged()
+        }
+        syncNoiseSensor()
+
         startNotificationUpdates()
         if (!isPomodoroSession) {
             scheduleSedentaryReminder()
@@ -157,10 +172,54 @@ class TimerForegroundService : Service() {
         return START_STICKY
     }
 
-    private fun closeActiveSession() {
+    /** Listens for room noise only while a focus session runs and only if opted in. */
+    private fun syncNoiseSensor() {
+        val wantsNoise = FocusSettings.isNoiseSensingEnabled(this) &&
+            NoiseMonitor.hasPermission(this) &&
+            (categoryType in DND_TYPES || autoDndRequested)
+        if (wantsNoise) NoiseMonitor.start(this) else NoiseMonitor.stop()
+    }
+
+    private fun notifyDndChanged() {
+        val intent = Intent(ACTION_DND_CHANGED).setPackage(packageName)
+        runCatching { sendBroadcast(intent) }
+    }
+
+    private fun stopEverything(targetSessionId: Long, stopPomodoro: Boolean) {
+        timerJob?.cancel()
+        sedentaryJob?.cancel()
+        wastedWarningJob?.cancel()
+        breakReminderJob?.cancel()
+        val stored = TimerStateStore.load(this)
+        val pomRunning = getSharedPreferences("pom_widget_prefs", MODE_PRIVATE)
+            .getBoolean("is_running", false)
+        if (stopPomodoro || stored.isPomodoro || isPomodoroSession || pomRunning) {
+            val stopPomodoroIntent = Intent(this, PomodoroForegroundService::class.java)
+                .setAction(PomodoroForegroundService.ACTION_STOP)
+            runCatching { startService(stopPomodoroIntent) }
+        }
+        scope.launch {
+            closeActiveSession(targetSessionId)
+            NoiseMonitor.stop()
+            FocusDndManager.restore(this@TimerForegroundService)
+            TimerStateStore.clear(this@TimerForegroundService)
+            notificationManager?.cancel(NOTIFICATION_ID)
+            notificationManager?.cancel(SEDENTARY_NOTIFICATION_ID)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            TimerWidgetProvider.updateWidgets(this@TimerForegroundService)
+        }
+    }
+
+    private suspend fun closeActiveSession(targetSessionId: Long = -1L) {
         val db = (applicationContext as SoulTrackApp).database
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching { db.sessionDao().stopActiveSession(System.currentTimeMillis()) }
+        withContext(Dispatchers.IO) {
+            val now = System.currentTimeMillis()
+            if (targetSessionId >= 0L) {
+                runCatching { db.sessionDao().stopSessionById(targetSessionId, now) }
+            } else {
+                runCatching { db.sessionDao().stopActiveSession(now) }
+            }
         }
     }
 
@@ -328,6 +387,7 @@ class TimerForegroundService : Service() {
             "Progress or regret \u2014 the choice is yours.",
             "Small changes lead to big results. Start now!"
         )
+        val warning = warnings.random()
 
         val pendingIntent = PendingIntent.getActivity(
             this, 0,
@@ -339,8 +399,8 @@ class TimerForegroundService : Service() {
 
         val notification = NotificationCompat.Builder(this, CHANNEL_SEDENTARY)
             .setContentTitle("Time Check")
-            .setContentText(warnings.random())
-            .setStyle(NotificationCompat.BigTextStyle().bigText(warnings.random()))
+            .setContentText(warning)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(warning))
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -370,6 +430,7 @@ class TimerForegroundService : Service() {
             "You've earned a break. Step away for a few minutes.",
             "Long focus sessions reduce quality. Take a 5-10 minute break."
         )
+        val reminder = reminders.random()
 
         val pendingIntent = PendingIntent.getActivity(
             this, 0,
@@ -381,8 +442,8 @@ class TimerForegroundService : Service() {
 
         val notification = NotificationCompat.Builder(this, CHANNEL_SEDENTARY)
             .setContentTitle("Take a Break!")
-            .setContentText(reminders.random())
-            .setStyle(NotificationCompat.BigTextStyle().bigText(reminders.random()))
+            .setContentText(reminder)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(reminder))
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -400,10 +461,13 @@ class TimerForegroundService : Service() {
         sedentaryJob?.cancel()
         wastedWarningJob?.cancel()
         breakReminderJob?.cancel()
-        val prefs = getSharedPreferences("widget_prefs", MODE_PRIVATE)
-        prefs.edit().putBoolean("is_running", false).apply()
         notificationManager?.cancel(NOTIFICATION_ID)
         notificationManager?.cancel(SEDENTARY_NOTIFICATION_ID)
+        if (!TimerStateStore.load(this).isRunning) {
+            NoiseMonitor.stop()
+            FocusDndManager.restore(this)
+        }
+        TimerStateStore.markServiceAlive(false)
         scope.cancel()
         super.onDestroy()
     }

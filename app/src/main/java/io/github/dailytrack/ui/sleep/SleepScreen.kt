@@ -17,108 +17,139 @@
 
 package io.github.dailytrack.ui.sleep
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.Hotel
+import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import io.github.dailytrack.ui.components.EmptyState
+import io.github.dailytrack.ui.components.PrimaryCta
+import io.github.dailytrack.ui.components.ScreenList
+import io.github.dailytrack.ui.components.ScreenSection
+import io.github.dailytrack.ui.components.SectionTitle
+import io.github.dailytrack.ui.components.StatTile
+import io.github.dailytrack.ui.theme.Dimens
+import io.github.dailytrack.ui.theme.RecoveryColor
+import io.github.dailytrack.ui.theme.SleepColor
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepScreen(navController: NavController) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Sleep & Recovery") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+    var bedtime by remember { mutableStateOf("") }
+    var wakeTime by remember { mutableStateOf("") }
+
+    ScreenList(
+        title = "Sleep & recovery",
+        subtitle = "Last night, debt and how you woke up",
+        navController = navController
+    ) {
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.CardGap)) {
+                StatTile(
+                    label = "Last night",
+                    value = "0h",
+                    icon = Icons.Default.Hotel,
+                    tint = SleepColor,
+                    caption = "Nothing logged yet",
+                    modifier = Modifier.weight(1f)
+                )
+                StatTile(
+                    label = "Sleep debt",
+                    value = "0h",
+                    icon = Icons.Default.SelfImprovement,
+                    tint = RecoveryColor,
+                    caption = "Target 8h per night",
+                    progress = 0f,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            ScreenSection(
+                title = "Log sleep",
+                subtitle = "When you went to bed and when you woke",
+                leadingIcon = Icons.Default.Bedtime,
+                tint = SleepColor
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.CardGap)
+                ) {
+                    OutlinedTextField(
+                        value = bedtime,
+                        onValueChange = { bedtime = it },
+                        label = { Text("Bedtime") },
+                        placeholder = { Text("23:00") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = wakeTime,
+                        onValueChange = { wakeTime = it },
+                        label = { Text("Wake time") },
+                        placeholder = { Text("07:00") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
+                Spacer(modifier = Modifier.height(Dimens.CardGap))
+                PrimaryCta(
+                    text = "Log sleep session",
+                    icon = Icons.Default.Add,
+                    onClick = {}
+                )
+            }
+        }
+
+        item {
+            SectionTitle(
+                title = "Recovery",
+                subtitle = "Warnings built from your recent nights",
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Last Night's Sleep", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("-- hours", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("No sleep logged yet", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Sleep Debt", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("0 hours", style = MaterialTheme.typography.headlineMedium)
-                        Text("Target: 8 hours per night", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Log Sleep", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = "",
-                                onValueChange = {},
-                                label = { Text("Bedtime") },
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = "",
-                                onValueChange = {},
-                                label = { Text("Wake time") },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = {}, modifier = Modifier.fillMaxWidth()) {
-                            Text("Log Sleep Session")
-                        }
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Recovery Warnings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No recovery warnings. Start tracking to receive personalized feedback.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            item {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Sleep History", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Charts will appear once you have logged sleep data.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
+        item {
+            EmptyState(
+                title = "No recovery warnings",
+                message = "Log a few nights and we will flag short sleep, late bedtimes and growing sleep debt here.",
+                icon = Icons.Default.HealthAndSafety,
+                tint = RecoveryColor
+            )
         }
+
+        item {
+            SectionTitle(
+                title = "Sleep history",
+                subtitle = "Your last seven nights",
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+        item {
+            EmptyState(
+                title = "No sleep history yet",
+                message = "Once you log your first night, duration and quality chart here night by night.",
+                icon = Icons.Default.BarChart,
+                tint = SleepColor
+            )
+        }
+        item { Spacer(modifier = Modifier.height(4.dp)) }
     }
 }

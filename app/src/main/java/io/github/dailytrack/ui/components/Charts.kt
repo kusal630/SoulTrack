@@ -50,6 +50,7 @@ fun PieChart(
     centerContent: @Composable (() -> Unit)? = null
 ) {
     val total = slices.sumOf { it.value.toDouble() }.toFloat()
+    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
     val animatedProgress = remember { Animatable(0f) }
 
     LaunchedEffect(slices) {
@@ -76,7 +77,7 @@ fun PieChart(
 
             if (total == 0f) {
                 drawArc(
-                    color = Color.Gray.copy(alpha = 0.2f),
+                    color = trackColor,
                     startAngle = 0f,
                     sweepAngle = 360f,
                     useCenter = false,
@@ -151,7 +152,7 @@ fun ProgressRing(
     size: Dp = 120.dp,
     strokeWidth: Dp = 12.dp,
     color: Color = MaterialTheme.colorScheme.primary,
-    trackColor: Color = Color.Gray.copy(alpha = 0.2f),
+    trackColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
     centerContent: @Composable (() -> Unit)? = null
 ) {
     val animatedProgress = remember { Animatable(0f) }
@@ -212,6 +213,7 @@ fun MiniPieChart(
     size: Dp = 48.dp
 ) {
     val total = slices.sumOf { it.value.toDouble() }.toFloat()
+    val trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
 
     Canvas(modifier = modifier.size(size)) {
         val stroke = 4.dp.toPx()
@@ -224,7 +226,7 @@ fun MiniPieChart(
 
         if (total == 0f) {
             drawArc(
-                color = Color.Gray.copy(alpha = 0.3f),
+                color = trackColor,
                 startAngle = 0f,
                 sweepAngle = 360f,
                 useCenter = false,

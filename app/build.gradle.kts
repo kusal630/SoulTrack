@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.dailytrack"
         minSdk = 24
         targetSdk = 35
-        versionCode = 8
-        versionName = "2.1.0"
+        versionCode = 9
+        versionName = "2.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -107,6 +107,7 @@ dependencies {
     coreLibraryDesugaring(libs.androidx.core.desugaring)
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

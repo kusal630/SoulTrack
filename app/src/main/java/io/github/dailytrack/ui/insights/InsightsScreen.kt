@@ -17,19 +17,24 @@
 
 package io.github.dailytrack.ui.insights
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -39,24 +44,39 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.InsightEntity
+import io.github.dailytrack.engine.DayStatus
+import io.github.dailytrack.engine.LoopDetectionResult
+import io.github.dailytrack.ui.Screen
 import io.github.dailytrack.ui.components.*
+import io.github.dailytrack.ui.components.brandColorAt
+import io.github.dailytrack.ui.navigateSingleTop
+import io.github.dailytrack.ui.theme.Aqua
+import io.github.dailytrack.ui.theme.ExerciseColor
+import io.github.dailytrack.ui.theme.LocalDayStatusColors
+import io.github.dailytrack.ui.theme.Mint
+import io.github.dailytrack.ui.theme.Sky
+import io.github.dailytrack.ui.theme.StatusWastingTime
+import io.github.dailytrack.ui.theme.GradientStart
+import io.github.dailytrack.ui.theme.LearningColor
+import io.github.dailytrack.ui.theme.NeutralColor
+import io.github.dailytrack.ui.theme.ProductiveColor
 import io.github.dailytrack.ui.theme.RecoveryColor
 import io.github.dailytrack.ui.theme.SleepColor
 import io.github.dailytrack.ui.theme.SocialColor
+import io.github.dailytrack.ui.theme.WastedColor
 import io.github.dailytrack.ui.navigateToHome
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import io.github.dailytrack.ui.viewmodel.WeeklyStats
+import java.time.LocalDate
 
-private val ProductiveGreen = Color(0xFF2E7D32)
-private val WastedRed = Color(0xFFC62828)
-private val FreeGray = Color(0xFF757575)
-private val LearningBlue = Color(0xFF1565C0)
-private val ExerciseOrange = Color(0xFFF57C00)
-private val SocialPurple = Color(0xFF7B1FA2)
-private val SleepTeal = Color(0xFF00897B)
-private val PomodoroRed = Color(0xFFE94560)
+private val ProductiveGreen = ProductiveColor
+private val WastedRed = WastedColor
+private val FreeGray = NeutralColor
+private val LearningBlue = LearningColor
+private val ExerciseOrange = ExerciseColor
+private val SocialPurple = SocialColor
+private val PomodoroRed = GradientStart
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InsightsScreen(
     navController: NavController,
@@ -72,79 +92,106 @@ fun InsightsScreen(
     val todayPomodoros by viewModel.todayPomodoros.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val dailyProductivity by viewModel.dailyProductivity.collectAsState()
+    val weeklyReport by viewModel.weeklyReport.collectAsState()
+    val activeTodos by viewModel.activeTodos.collectAsState()
+    val completedTodos by viewModel.completedTodos.collectAsState()
+    val loopStatus by viewModel.loopStatus.collectAsState()
+    val today = LocalDate.now()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Insights") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateToHome() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+    ScreenList(
+        title = "Insights",
+        subtitle = "Where your time actually goes",
+        onBack = { navController.navigateToHome() }
+    ) {
+        item {
+            PrimaryCta(
+                text = "Open weekly report",
+                icon = Icons.Default.Assessment,
+                onClick = { navController.navigateSingleTop(Screen.WeeklyReport.route) }
             )
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                GrowthScoreCard(
-                    growthScore = growthScore,
-                    growthResult = growthResult,
-                    hasData = weeklyStats.totalTrackedMinutes > 0
-                )
-            }
 
-            item {
-                TodoProgressCard(activeCount = activeTodoCount, completedCount = completedTodoCount)
-            }
-
-            item {
-                TimeDistributionCard(weeklyStats = weeklyStats)
-            }
-
-            item {
-                CategoryBreakdownCard(
-                    sessions = todaySessions,
-                    categories = categories,
-                    pomodoros = todayPomodoros
-                )
-            }
-
-            item {
-                WeeklyTrendCard(dailyProductivity = dailyProductivity)
-            }
-
-            item {
-                PomodoroStatsCard(
-                    pomodoros = todayPomodoros,
-                    weeklyStats = weeklyStats
-                )
-            }
-
-            if (activeInsights.isNotEmpty()) {
-                item {
-                    Text(
-                        "Smart Insights (${activeInsights.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                items(activeInsights, key = { it.id }) { insight ->
-                    InsightDetailCard(
-                        insight = insight,
-                        onDismiss = { viewModel.dismissInsight(insight.id) }
-                    )
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(8.dp)) }
+        item {
+            GrowthScoreCard(
+                growthScore = growthScore,
+                growthResult = growthResult,
+                hasData = weeklyStats.totalTrackedMinutes > 0,
+                trendDelta = productivityTrendDelta(dailyProductivity)
+            )
         }
+
+        item {
+            WeekStatusBarsCard(
+                today = today,
+                weeklyReport = weeklyReport,
+                todos = activeTodos + completedTodos
+            )
+        }
+
+        loopStatus?.let { loop ->
+            item {
+                ComfortZoneCard(
+                    loop = loop,
+                    dayProgress = dayProgressOf(activeTodos + completedTodos),
+                    weekProgress = weekStatusesFor(today, weeklyReport, activeTodos + completedTodos)
+                        .count { it == DayStatus.DONE } / 7f
+                )
+            }
+        }
+
+        item {
+            TodoProgressCard(activeCount = activeTodoCount, completedCount = completedTodoCount)
+        }
+
+        item {
+            TimeDistributionCard(weeklyStats = weeklyStats)
+        }
+
+        item {
+            CategoryBreakdownCard(
+                sessions = todaySessions,
+                categories = categories,
+                pomodoros = todayPomodoros
+            )
+        }
+
+        item {
+            WeeklyTrendCard(dailyProductivity = dailyProductivity)
+        }
+
+        item {
+            PomodoroStatsCard(
+                pomodoros = todayPomodoros,
+                weeklyStats = weeklyStats
+            )
+        }
+
+        if (activeInsights.isEmpty()) {
+            item {
+                EmptyState(
+                    title = "No insights yet",
+                    message = "Smart insights show up once you have tracked a few days of activity.",
+                    icon = Icons.Default.Lightbulb,
+                    actionLabel = "Open weekly report",
+                    onAction = { navController.navigateSingleTop(Screen.WeeklyReport.route) }
+                )
+            }
+        } else {
+            item {
+                SectionTitle(
+                    title = "Smart insights",
+                    subtitle = "${activeInsights.size} active"
+                )
+            }
+            items(activeInsights, key = { it.id }) { insight ->
+                InsightDetailCard(
+                    insight = insight,
+                    onDismiss = { viewModel.dismissInsight(insight.id) }
+                )
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(8.dp)) }
     }
 }
 
@@ -152,34 +199,30 @@ fun InsightsScreen(
 fun GrowthScoreCard(
     growthScore: Double,
     growthResult: io.github.dailytrack.engine.GrowthScoreResult?,
-    hasData: Boolean = true
+    hasData: Boolean = true,
+    trendDelta: Float? = null
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    SurfaceCard {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val scoreColor = when {
-                !hasData -> FreeGray
+                !hasData -> MaterialTheme.colorScheme.onSurfaceVariant
                 growthScore >= 70 -> ProductiveGreen
                 growthScore >= 40 -> ExerciseOrange
                 else -> WastedRed
             }
 
-            ProgressRing(
+            BrandScoreArc(
                 progress = (growthScore / 100.0).coerceIn(0.0, 1.0).toFloat(),
-                size = 100.dp,
-                strokeWidth = 10.dp,
-                color = scoreColor,
                 centerContent = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "${growthScore.toInt()}",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
-                            color = scoreColor
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Growth",
@@ -197,6 +240,25 @@ fun GrowthScoreCard(
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+                if (trendDelta != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (trendDelta >= 0f) Icons.Default.TrendingUp
+                            else Icons.Default.TrendingDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (trendDelta >= 0f) Mint else StatusWastingTime
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "%+.0f%% vs your week's average".format(trendDelta),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (trendDelta >= 0f) Mint else StatusWastingTime
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
                 if (growthResult != null) {
                     ScoreBreakdown("Learning", growthResult.learningComponent, LearningBlue)
                     ScoreBreakdown("Productive", growthResult.productiveComponent, ProductiveGreen)
@@ -234,7 +296,7 @@ fun ScoreBreakdown(label: String, score: Double, color: Color) {
                 .weight(1f)
                 .height(6.dp),
             color = color,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
@@ -250,11 +312,9 @@ fun ScoreBreakdown(label: String, score: Double, color: Color) {
 fun TodoProgressCard(activeCount: Int, completedCount: Int) {
     val total = activeCount + completedCount
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    SurfaceCard {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             PieChart(
@@ -296,15 +356,15 @@ fun TimeDistributionCard(weeklyStats: WeeklyStats) {
     val slices = listOf(
         PieChartSlice(weeklyStats.totalProductiveMinutes.toFloat(), ProductiveGreen, "Productive"),
         PieChartSlice(weeklyStats.totalSleepMinutes.toFloat(), SleepColor, "Sleep"),
-        PieChartSlice(weeklyStats.totalWastedMinutes.toFloat(), WastedRed, "Wasted"),
+        PieChartSlice(weeklyStats.totalWastedMinutes.toFloat(), StatusWastingTime, "Wasted"),
         PieChartSlice(weeklyStats.totalSocialMinutes.toFloat(), SocialColor, "Social"),
         PieChartSlice(weeklyStats.totalRecoveryMinutes.toFloat(), RecoveryColor, "Recovery"),
         PieChartSlice(weeklyStats.totalFreeMinutes.toFloat(), FreeGray, "Free"),
     ).filter { it.value > 0f }
     val total = weeklyStats.totalTrackedMinutes.toFloat()
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    SurfaceCard {
+        Column {
             Text(
                 "Weekly Time Distribution",
                 style = MaterialTheme.typography.titleMedium,
@@ -317,36 +377,30 @@ fun TimeDistributionCard(weeklyStats: WeeklyStats) {
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    PieChart(
-                        slices = slices,
-                        size = 120.dp,
-                        strokeWidth = 16.dp,
-                        centerContent = {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "${(total / 60).toInt()}h",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "total",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        StackedTimeBar(slices = slices, totalMinutes = total)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        PieChartLegend(slices = slices)
+                    }
                     Spacer(modifier = Modifier.width(16.dp))
-                    PieChartLegend(
-                        slices = slices,
-                        modifier = Modifier.weight(1f)
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "${(total / 60).toInt()}h",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "total",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             } else {
-                Text(
-                    "No data available yet",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                EmptyState(
+                    title = "No time tracked yet",
+                    message = "Start a timer and your week will fill in here.",
+                    icon = Icons.Default.PieChart
                 )
             }
         }
@@ -389,8 +443,8 @@ fun CategoryBreakdownCard(
             PieChartSlice(entry.value, colors[index % colors.size], entry.key)
         }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    SurfaceCard {
+        Column {
             Text(
                 "Today's Category Breakdown",
                 style = MaterialTheme.typography.titleMedium,
@@ -441,13 +495,30 @@ fun CategoryBreakdownCard(
 
 @Composable
 fun WeeklyTrendCard(dailyProductivity: List<Pair<String, Float>>) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "Weekly Productivity Trend",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val trendColor = ProductiveGreen
+
+    SurfaceCard {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Weekly Productivity Trend",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                productivityTrendDelta(dailyProductivity)?.let { delta ->
+                    Text(
+                        text = "%+.0f%%".format(delta),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (delta >= 0f) Mint else StatusWastingTime
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
 
             if (dailyProductivity.isNotEmpty() && dailyProductivity.any { it.second > 0 }) {
@@ -467,7 +538,7 @@ fun WeeklyTrendCard(dailyProductivity: List<Pair<String, Float>>) {
                     for (i in 0..3) {
                         val y = height - (height * i / 3f)
                         drawLine(
-                            color = Color.Gray.copy(alpha = 0.15f),
+                            color = gridColor,
                             start = Offset(0f, y),
                             end = Offset(width, y),
                             strokeWidth = 1f
@@ -485,7 +556,7 @@ fun WeeklyTrendCard(dailyProductivity: List<Pair<String, Float>>) {
 
                     drawPath(
                         path = path,
-                        color = ProductiveGreen,
+                        brush = Brush.horizontalGradient(listOf(Mint, Aqua, Sky)),
                         style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
                     )
 
@@ -494,7 +565,7 @@ fun WeeklyTrendCard(dailyProductivity: List<Pair<String, Float>>) {
                         val x = index * stepX
                         val y = height - (value / maxValue * (height - padding * 2)) - padding
                         drawCircle(
-                            color = ProductiveGreen,
+                            color = brandColorAt(index.toFloat() / (dailyProductivity.size - 1).coerceAtLeast(1)),
                             radius = 5.dp.toPx(),
                             center = Offset(x, y)
                         )
@@ -534,23 +605,22 @@ fun PomodoroStatsCard(
     val totalPomodoroMinutes = pomodoros
         .filter { it.isCompleted && it.type == "WORK" }
         .sumOf { it.durationMinutes }
+    val remainingColor = MaterialTheme.colorScheme.surfaceContainerHighest
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    SurfaceCard {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-                    PieChart(
-                        slices = listOf(
-                            PieChartSlice(completedPomodoros.toFloat(), PomodoroRed, "Completed"),
-                            PieChartSlice(
-                                (8 - completedPomodoros.toFloat()).coerceAtLeast(0f),
-                                Color.Gray.copy(alpha = 0.3f),
-                                "Remaining"
-                            ),
-                        ),
+            PieChart(
+                slices = listOf(
+                    PieChartSlice(completedPomodoros.toFloat(), PomodoroRed, "Completed"),
+                    PieChartSlice(
+                        (8 - completedPomodoros.toFloat()).coerceAtLeast(0f),
+                        remainingColor,
+                        "Remaining"
+                    ),
+                ),
                 size = 80.dp,
                 strokeWidth = 12.dp,
                 centerContent = {
@@ -607,21 +677,17 @@ fun PomodoroStatsCard(
 
 @Composable
 fun InsightDetailCard(insight: InsightEntity, onDismiss: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = when (insight.severity) {
-                "CRITICAL" -> MaterialTheme.colorScheme.errorContainer
-                "WARNING" -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                "CAUTION" -> MaterialTheme.colorScheme.tertiaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-        )
+    SurfaceCard(
+        containerColor = when (insight.severity) {
+            "CRITICAL" -> MaterialTheme.colorScheme.errorContainer
+            "WARNING" -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+            "CAUTION" -> MaterialTheme.colorScheme.tertiaryContainer
+            else -> MaterialTheme.colorScheme.surfaceContainer
+        },
+        border = null
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top
         ) {
@@ -669,4 +735,315 @@ fun InsightDetailCard(insight: InsightEntity, onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+
+/** Mint -> aqua -> sky arc, the same sweep the week ring uses. */
+@Composable
+private fun BrandScoreArc(
+    progress: Float,
+    centerContent: @Composable () -> Unit
+) {
+    val reduceMotion = rememberReduceMotion()
+    val animated by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = if (reduceMotion) {
+            spring(dampingRatio = 1f, stiffness = Spring.StiffnessHigh)
+        } else {
+            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+        },
+        label = "growthArc"
+    )
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
+        Canvas(modifier = Modifier.size(100.dp)) {
+            val stroke = 10.dp.toPx()
+            val inset = stroke / 2f
+            val arcSize = Size(size.width - stroke, size.height - stroke)
+            drawArc(
+                color = track,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            if (animated > 0f) {
+                drawArc(
+                    brush = Brush.sweepGradient(listOf(Mint, Aqua, Sky, Mint)),
+                    startAngle = -90f,
+                    sweepAngle = 360f * animated,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round)
+                )
+            }
+        }
+        centerContent()
+    }
+}
+
+/** How far today sits from the week's average productivity, in percent. */
+private fun productivityTrendDelta(dailyProductivity: List<Pair<String, Float>>): Float? {
+    if (dailyProductivity.size < 2) return null
+    val values = dailyProductivity.map { it.second }
+    val latest = values.last()
+    val rest = values.dropLast(1)
+    val average = rest.average().toFloat()
+    if (average <= 0f) return null
+    return (latest - average) / average * 100f
+}
+
+private fun dayProgressOf(todos: List<io.github.dailytrack.data.db.entity.TodoEntity>): Float =
+    io.github.dailytrack.ui.components.dayProgressFor(LocalDate.now(), todos)
+
+/**
+ * Seven bars, one per day, in this week's classification colours. Today's
+ * bar is dim until midnight, exactly like the outer ring segment.
+ */
+@Composable
+fun WeekStatusBarsCard(
+    today: LocalDate,
+    weeklyReport: Map<LocalDate, io.github.dailytrack.engine.TimeCoverage>,
+    todos: List<io.github.dailytrack.data.db.entity.TodoEntity>
+) {
+    val palette = LocalDayStatusColors.current
+    val statuses = weekStatusesFor(today, weeklyReport, todos)
+    val barHeight = 84.dp
+
+    SurfaceCard {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Your week",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${statuses.count { it == DayStatus.DONE }} clean days",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                statuses.forEachIndexed { index, status ->
+                    val date = today.minusDays((6 - index).toLong())
+                    val isToday = index == today.dayOfWeek.value - 1
+                    val progress = if (status == null) 0f else dayProgressFor(date, todos)
+                    val color = palette.colorFor(if (isToday) null else status)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(14.dp)
+                                .height(barHeight)
+                                .clip(RoundedCornerShape(50))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(barHeight * progress.coerceAtLeast(0.08f))
+                                    .clip(RoundedCornerShape(50))
+                                    .background(color.copy(alpha = if (isToday) 0.45f else 1f))
+                            )
+                            if (isToday) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(MaterialTheme.colorScheme.onSurface)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = WeekDayShortNames[index],
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isToday) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Icon(
+                            imageVector = statusIcon(status),
+                            contentDescription = if (isToday) "Today, in progress"
+                            else status?.label ?: "Not happened yet",
+                            tint = color,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StatusLegendItem(DayStatus.DONE, modifier = Modifier.weight(1f))
+                StatusLegendItem(DayStatus.TASKS_NOT_MET, modifier = Modifier.weight(1f))
+                StatusLegendItem(DayStatus.NOT_PRODUCTIVE, modifier = Modifier.weight(1f))
+                StatusLegendItem(DayStatus.WASTING_TIME, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusLegendItem(status: DayStatus, modifier: Modifier = Modifier) {
+    val palette = LocalDayStatusColors.current
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = statusIcon(status),
+            contentDescription = null,
+            tint = palette.colorFor(status),
+            modifier = Modifier.size(12.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = status.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+    }
+}
+
+/** Concentric rings: today inside the week, with the routine loop at the core. */
+@Composable
+private fun ComfortZoneCard(loop: LoopDetectionResult, dayProgress: Float, weekProgress: Float) {
+    val palette = LocalDayStatusColors.current
+    val warning = loop.isLoopDetected || loop.comfortZoneWarning
+    val tint = if (warning) palette.wastingTime else palette.notProductive
+
+    SurfaceCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ConcentricZones(
+                todayProgress = dayProgress,
+                weekProgress = weekProgress,
+                tint = tint,
+                warning = warning
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (loop.isLoopDetected) "Routine loop detected" else "Comfort zone",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = if (loop.isLoopDetected) {
+                        "Your routine has looked the same for ${loop.consecutiveDays} days. " +
+                            "Add something new to break out."
+                    } else {
+                        "Same shape, day after day. Rotate an activity and the rings stay honest."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (loop.consecutiveDays > 0) {
+                    Text(
+                        text = "${loop.consecutiveDays} similar days in a row",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = tint
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConcentricZones(
+    todayProgress: Float,
+    weekProgress: Float,
+    tint: Color,
+    warning: Boolean
+) {
+    val ringColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(72.dp)) {
+        Canvas(modifier = Modifier.size(72.dp)) {
+            val stroke = 7.dp.toPx()
+            // Outer ring: the week.
+            drawCircle(
+                color = ringColor,
+                radius = size.minDimension / 2f - stroke / 2f,
+                style = Stroke(width = stroke)
+            )
+            drawArc(
+                color = Sky,
+                startAngle = -90f,
+                sweepAngle = 360f * weekProgress.coerceIn(0f, 1f),
+                useCenter = false,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            // Middle ring: today.
+            drawCircle(
+                color = ringColor,
+                radius = size.minDimension / 2f - stroke * 1.8f,
+                style = Stroke(width = stroke)
+            )
+            drawArc(
+                color = Aqua,
+                startAngle = -90f,
+                sweepAngle = 360f * todayProgress.coerceIn(0f, 1f),
+                useCenter = false,
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+            // Core: the loop itself.
+            drawCircle(
+                color = if (warning) tint else Mint,
+                radius = size.minDimension / 2f - stroke * 3.2f
+            )
+        }
+    }
+}
+
+/** A single horizontal bar, one segment per slice, rounded at both ends. */
+@Composable
+private fun StackedTimeBar(slices: List<PieChartSlice>, totalMinutes: Float) {
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(22.dp)
+            .clip(RoundedCornerShape(50))
+            .background(track)
+    ) {
+        var x = 0f
+        slices.forEach { slice ->
+            val width = (slice.value / totalMinutes.coerceAtLeast(1f)) * size.width
+            drawRect(
+                color = slice.color,
+                topLeft = Offset(x, 0f),
+                size = Size(width, size.height)
+            )
+            x += width
+        }
+    }
+}
+
+private fun statusIcon(status: DayStatus?) = when (status) {
+    DayStatus.DONE -> Icons.Default.CheckCircle
+    DayStatus.TASKS_NOT_MET -> Icons.Default.Repeat
+    DayStatus.NOT_PRODUCTIVE -> Icons.Default.Timer
+    DayStatus.WASTING_TIME -> Icons.Default.LocalFireDepartment
+    DayStatus.NO_TASKS -> Icons.Default.Assignment
+    else -> Icons.Default.HourglassEmpty
 }

@@ -1,25 +1,71 @@
+/*
+ * Copyright 2024 Soul Track Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.github.dailytrack.ui.goals
 
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.dailytrack.data.db.entity.GoalEntity
-import io.github.dailytrack.ui.theme.*
+import io.github.dailytrack.ui.components.EmptyState
+import io.github.dailytrack.ui.components.PillChip
+import io.github.dailytrack.ui.components.PrimaryCta
+import io.github.dailytrack.ui.components.ScreenList
+import io.github.dailytrack.ui.components.StatTile
+import io.github.dailytrack.ui.components.SurfaceCard
+import io.github.dailytrack.ui.theme.Dimens
+import io.github.dailytrack.ui.theme.ExerciseColor
+import io.github.dailytrack.ui.theme.LearningColor
+import io.github.dailytrack.ui.theme.ProductiveColor
+import io.github.dailytrack.ui.theme.SleepColor
+import io.github.dailytrack.ui.theme.SocialColor
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoalsScreen(
     goals: List<GoalEntity>,
@@ -36,69 +82,60 @@ fun GoalsScreen(
 
     val categories = listOf("PRODUCTIVE", "EXERCISE", "LEARNING", "SLEEP", "SOCIAL")
     val targetTypes = listOf("DAILY", "WEEKLY", "MONTHLY")
+    val activeCount = goals.count { !it.isCompleted }
+    val completedCount = goals.count { it.isCompleted }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text("Goals", fontWeight = FontWeight.Bold)
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = ProductiveColor
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Goal")
-            }
-        }
-    ) { padding ->
+    ScreenList(
+        title = "Goals",
+        subtitle = "Targets you are working toward",
+        onBack = null
+    ) {
         if (goals.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(text = "🎯", fontSize = 64.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "No goals yet",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Set targets to track your progress!",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            item {
+                EmptyState(
+                    title = "No goals yet",
+                    message = "Set a weekly target — deep work hours, workouts, study time — and watch the bar fill up.",
+                    icon = Icons.Default.Flag,
+                    tint = ProductiveColor,
+                    actionLabel = "Add goal",
+                    onAction = { showAddDialog = true }
+                )
             }
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(vertical = 16.dp)
-            ) {
-                items(goals, key = { it.id }) { goal ->
-                    GoalCard(
-                        goal = goal,
-                        onUpdateProgress = { hours -> onUpdateProgress(goal.id, hours) },
-                        onDelete = { onDeleteGoal(goal) }
+            item {
+                PrimaryCta(
+                    text = "Add goal",
+                    icon = Icons.Default.Add,
+                    onClick = { showAddDialog = true }
+                )
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(Dimens.CardGap)) {
+                    StatTile(
+                        label = "Active",
+                        value = "$activeCount",
+                        icon = Icons.Default.TrackChanges,
+                        tint = ProductiveColor,
+                        caption = "In progress",
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatTile(
+                        label = "Completed",
+                        value = "$completedCount",
+                        icon = Icons.Default.CheckCircle,
+                        tint = LearningColor,
+                        caption = "All time",
+                        progress = if (goals.isEmpty()) 0f else completedCount / goals.size.toFloat(),
+                        modifier = Modifier.weight(1f)
                     )
                 }
+            }
+            items(goals, key = { it.id }) { goal ->
+                GoalCard(
+                    goal = goal,
+                    onUpdateProgress = { hours -> onUpdateProgress(goal.id, hours) },
+                    onDelete = { onDeleteGoal(goal) }
+                )
             }
         }
     }
@@ -106,17 +143,17 @@ fun GoalsScreen(
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text("Add New Goal") },
+            title = { Text("Add new goal") },
             text = {
                 Column {
                     OutlinedTextField(
                         value = newGoalTitle,
                         onValueChange = { newGoalTitle = it },
-                        label = { Text("Goal Title") },
+                        label = { Text("Goal title") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Dimens.CardGap))
                     OutlinedTextField(
                         value = newGoalDescription,
                         onValueChange = { newGoalDescription = it },
@@ -124,37 +161,37 @@ fun GoalsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         maxLines = 2
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Dimens.CardGap))
                     Text("Category", style = MaterialTheme.typography.titleSmall)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Spacer(modifier = Modifier.height(Dimens.TitleGap))
+                    Row(horizontalArrangement = Arrangement.spacedBy(Dimens.TitleGap)) {
                         categories.forEach { category ->
-                            FilterChip(
+                            PillChip(
+                                label = category.lowercase().replaceFirstChar { it.uppercase() },
                                 selected = newGoalCategory == category,
                                 onClick = { newGoalCategory = category },
-                                label = { Text(category.lowercase().replaceFirstChar { it.uppercase() }) }
+                                tint = ProductiveColor
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Dimens.CardGap))
                     OutlinedTextField(
                         value = newGoalTarget,
                         onValueChange = { newGoalTarget = it },
-                        label = { Text("Target Hours") },
+                        label = { Text("Target hours") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(Dimens.CardGap))
                     Text("Timeframe", style = MaterialTheme.typography.titleSmall)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Spacer(modifier = Modifier.height(Dimens.TitleGap))
+                    Row(horizontalArrangement = Arrangement.spacedBy(Dimens.TitleGap)) {
                         targetTypes.forEach { type ->
-                            FilterChip(
+                            PillChip(
+                                label = type.lowercase().replaceFirstChar { it.uppercase() },
                                 selected = newGoalType == type,
                                 onClick = { newGoalType = type },
-                                label = { Text(type.lowercase().replaceFirstChar { it.uppercase() }) }
+                                tint = ProductiveColor
                             )
                         }
                     }
@@ -208,96 +245,99 @@ fun GoalCard(
         else -> ProductiveColor
     }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (goal.isCompleted) categoryColor.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    SurfaceCard(
+        containerColor = if (goal.isCompleted) {
+            categoryColor.copy(alpha = 0.12f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        }
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = goal.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (goal.description.isNotBlank()) {
                     Text(
-                        text = goal.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        text = goal.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (goal.description.isNotBlank()) {
-                        Text(
-                            text = goal.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
-                if (goal.isCompleted) {
+            }
+            if (goal.isCompleted) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = "Completed",
+                    tint = categoryColor
+                )
+            } else {
+                IconButton(onClick = onDelete) {
                     Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = "Completed",
-                        tint = ProductiveColor
+                        Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                } else {
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            LinearProgressIndicator(
-                progress = { animatedProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                color = categoryColor,
-                trackColor = categoryColor.copy(alpha = 0.2f)
+        }
+        Spacer(modifier = Modifier.height(Dimens.CardGap))
+        LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp)),
+            color = categoryColor,
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+        )
+        Spacer(modifier = Modifier.height(Dimens.TitleGap))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "${goal.currentHours.toInt()}h / ${goal.targetHours.toInt()}h",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "${goal.currentHours.toInt()}h / ${goal.targetHours.toInt()}h",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Text(
+                text = "${(progress * 100).toInt()}%",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = categoryColor
+            )
+        }
+        if (!goal.isCompleted) {
+            Spacer(modifier = Modifier.height(Dimens.TitleGap))
+            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.TitleGap)) {
+                PillChip(
+                    label = "+0.5h",
+                    selected = false,
+                    onClick = { onUpdateProgress(0.5f) },
+                    tint = categoryColor,
+                    modifier = Modifier.height(48.dp)
                 )
-                Text(
-                    text = "${(progress * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = categoryColor
+                PillChip(
+                    label = "+1h",
+                    selected = false,
+                    onClick = { onUpdateProgress(1f) },
+                    tint = categoryColor,
+                    modifier = Modifier.height(48.dp)
                 )
-            }
-            if (!goal.isCompleted) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    AssistChip(
-                        onClick = { onUpdateProgress(0.5f) },
-                        label = { Text("+0.5h") }
-                    )
-                    AssistChip(
-                        onClick = { onUpdateProgress(1f) },
-                        label = { Text("+1h") }
-                    )
-                    AssistChip(
-                        onClick = { onUpdateProgress(2f) },
-                        label = { Text("+2h") }
-                    )
-                }
+                PillChip(
+                    label = "+2h",
+                    selected = false,
+                    onClick = { onUpdateProgress(2f) },
+                    tint = categoryColor,
+                    modifier = Modifier.height(48.dp)
+                )
             }
         }
     }

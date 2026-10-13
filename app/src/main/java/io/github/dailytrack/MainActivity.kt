@@ -26,6 +26,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +43,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.ui.DailyTrackNavHost
+import io.github.dailytrack.ui.components.SoulRings
+import io.github.dailytrack.ui.components.rememberReduceMotion
 import io.github.dailytrack.ui.theme.*
 import io.github.dailytrack.ui.onboarding.OnboardingScreen
 import io.github.dailytrack.widget.QuoteWidgetProvider
@@ -57,7 +62,10 @@ class MainActivity : ComponentActivity() {
     private var showOnboarding by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        ThemeSettings.load(this)
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             enableEdgeToEdge()
@@ -114,68 +122,65 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * The Compose half of the splash: the mark itself, breathing on pure black,
+ * before the app takes over. The system splash (SplashScreen API) covers the
+ * cold start; this is the second beat that shows the rings coming alive.
+ */
 @Composable
 fun SplashScreen(onSplashComplete: () -> Unit) {
-    val scale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "splash_scale"
-    )
+    val reduceMotion = rememberReduceMotion()
 
-    val alpha by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(
-            durationMillis = 800,
-            easing = FastOutSlowInEasing
-        ),
-        label = "splash_alpha"
-    )
-
+    var progress by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
-        delay(1500)
+        if (reduceMotion) {
+            progress = 0.25f
+            delay(600)
+        } else {
+            delay(120)
+            progress = 0.25f
+            delay(1000)
+            progress = 0.62f
+            delay(500)
+        }
         onSplashComplete()
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        GradientStart,
-                        GradientMid,
-                        GradientEnd
-                    )
-                )
-            ),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .scale(scale)
-                .alpha(alpha)
-        ) {
-            Text(
-                text = "Soul",
-                fontSize = 64.sp,
-                fontWeight = FontWeight.Light,
-                color = Color.White
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            SoulRings(
+                dayProgress = progress,
+                weekStatuses = listOf(
+                    DayStatus.DONE,
+                    DayStatus.TASKS_NOT_MET,
+                    DayStatus.NOT_PRODUCTIVE,
+                    DayStatus.WASTING_TIME,
+                    DayStatus.DONE,
+                    null,
+                    null
+                ),
+                todayIndex = 5,
+                modifier = Modifier.size(240.dp),
+                animate = !reduceMotion,
+                contentDescription = "Soul Track"
             )
+            Spacer(modifier = Modifier.height(28.dp))
             Text(
-                text = "Track",
-                fontSize = 64.sp,
+                text = "Soul Track",
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Track your life. Grow daily.",
-                fontSize = 16.sp,
-                color = Color.White.copy(alpha = 0.8f)
+                text = "Every second, accounted for",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

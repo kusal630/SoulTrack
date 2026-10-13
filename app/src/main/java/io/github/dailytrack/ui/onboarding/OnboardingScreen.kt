@@ -1,31 +1,72 @@
+/*
+ * Copyright 2024 Soul Track Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
 package io.github.dailytrack.ui.onboarding
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import io.github.dailytrack.ui.components.PrimaryCta
+import io.github.dailytrack.ui.components.SurfaceCard
+import io.github.dailytrack.ui.theme.Dimens
 import io.github.dailytrack.ui.theme.GradientEnd
-import io.github.dailytrack.ui.theme.GradientMid
 import io.github.dailytrack.ui.theme.GradientStart
 import kotlinx.coroutines.launch
 
@@ -37,7 +78,6 @@ data class OnboardingPage(
     val isQuote: Boolean = false
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingScreen(onComplete: () -> Unit) {
     val pages = listOf(
@@ -61,7 +101,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
             description = "Add tasks with priority levels (High/Medium/Low), set deadlines, and break them into subtasks. Link todos to your Pomodoro sessions for focused execution."
         ),
         OnboardingPage(
-            icon =             Icons.Default.ShowChart,
+            icon = Icons.Default.ShowChart,
             title = "Growth Tracking",
             subtitle = "See your progress",
             description = "Your growth score updates automatically based on how you spend your time. Learning, productivity, exercise, and rest all contribute to your overall score."
@@ -88,35 +128,37 @@ fun OnboardingScreen(onComplete: () -> Unit) {
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
+    val isLastPage = pagerState.currentPage >= pages.size - 1
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        GradientStart.copy(alpha = 0.3f),
-                        GradientMid.copy(alpha = 0.5f),
-                        GradientEnd.copy(alpha = 0.3f)
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            GradientStart.copy(alpha = 0.22f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0f),
+                            GradientEnd.copy(alpha = 0.16f)
+                        )
                     )
                 )
-            )
-    ) {
+        )
+
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Welcome to Soul Track",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
+            Text(
+                text = "Welcome to Soul Track",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp)
             )
 
             HorizontalPager(
@@ -131,90 +173,95 @@ fun OnboardingScreen(onComplete: () -> Unit) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 repeat(pages.size) { index ->
                     val isSelected = pagerState.currentPage == index
+                    val width by animateDpAsState(
+                        targetValue = if (isSelected) 24.dp else 8.dp,
+                        label = "indicator_width"
+                    )
                     val scale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.3f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        ),
+                        targetValue = if (isSelected) 1.1f else 1f,
                         label = "indicator_scale"
                     )
 
                     Box(
                         modifier = Modifier
-                            .padding(4.dp)
+                            .padding(horizontal = 3.dp)
                             .scale(scale)
-                            .size(if (isSelected) 12.dp else 8.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .width(width)
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(50))
                             .background(
-                                if (isSelected)
-                                    GradientStart
-                                else
-                                    Color.White.copy(alpha = 0.4f)
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHighest
+                                }
                             )
                     )
                 }
             }
 
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(horizontal = Dimens.ScreenPadding, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(Dimens.CardGap)
             ) {
-                if (pagerState.currentPage > 0) {
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                            }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (pagerState.currentPage > 0) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                                }
+                            },
+                            modifier = Modifier.height(Dimens.MinTouchTarget)
+                        ) {
+                            Text(
+                                text = "Back",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    ) {
-                        Text("Back", color = Color.White.copy(alpha = 0.8f))
+                    } else {
+                        Spacer(modifier = Modifier.width(80.dp))
                     }
-                } else {
-                    Spacer(modifier = Modifier.width(80.dp))
+                    Spacer(modifier = Modifier.weight(1f))
+                    if (!isLastPage) {
+                        TextButton(
+                            onClick = onComplete,
+                            modifier = Modifier.height(Dimens.MinTouchTarget)
+                        ) {
+                            Text(
+                                text = "Skip",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
 
-                if (pagerState.currentPage < pages.size - 1) {
-                    Button(
-                        onClick = {
+                PrimaryCta(
+                    text = if (isLastPage) "Get started" else "Continue",
+                    icon = if (isLastPage) null else Icons.AutoMirrored.Filled.ArrowForward,
+                    onClick = {
+                        if (isLastPage) {
+                            onComplete()
+                        } else {
                             scope.launch {
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = GradientStart
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 4.dp,
-                            pressedElevation = 8.dp
-                        )
-                    ) {
-                        Text("Next")
+                        }
                     }
-                } else {
-                    Button(
-                        onClick = onComplete,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = GradientStart
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = ButtonDefaults.buttonElevation(
-                            defaultElevation = 4.dp,
-                            pressedElevation = 8.dp
-                        )
-                    ) {
-                        Text("Get Started")
-                    }
-                }
+                )
             }
         }
     }
@@ -225,24 +272,32 @@ fun OnboardingPageContent(page: OnboardingPage) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(horizontal = 28.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = page.icon,
-            contentDescription = null,
-            tint = GradientStart,
-            modifier = Modifier.size(64.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(88.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = page.icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
             text = page.title,
-            color = Color.White,
-            fontSize = 28.sp,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
 
@@ -251,38 +306,33 @@ fun OnboardingPageContent(page: OnboardingPage) {
         if (page.isQuote) {
             Text(
                 text = page.subtitle,
-                color = GradientStart,
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
                 fontStyle = FontStyle.Italic,
-                fontFamily = FontFamily.Serif,
-                textAlign = TextAlign.Center,
-                lineHeight = 26.sp
+                textAlign = TextAlign.Center
             )
         } else {
             Text(
                 text = page.subtitle,
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Card(
+        SurfaceCard(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White.copy(alpha = 0.1f)
-            ),
-            shape = RoundedCornerShape(16.dp)
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            contentPadding = PaddingValues(20.dp)
         ) {
             Text(
                 text = page.description,
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(20.dp),
-                lineHeight = 22.sp
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
             )
         }
     }

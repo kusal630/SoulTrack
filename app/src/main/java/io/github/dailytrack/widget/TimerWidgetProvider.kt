@@ -14,6 +14,7 @@ import io.github.dailytrack.SoulTrackApp
 import io.github.dailytrack.data.api.QuotesApi
 import io.github.dailytrack.data.db.entity.SessionEntity
 import io.github.dailytrack.service.TimerForegroundService
+import io.github.dailytrack.service.TimerStateStore
 import kotlinx.coroutines.*
 
 class TimerWidgetProvider : AppWidgetProvider() {
@@ -41,6 +42,15 @@ class TimerWidgetProvider : AppWidgetProvider() {
             }
             context.sendBroadcast(intent)
         }
+
+        /** Pushes a quote straight into the widget (used on every app launch). */
+        fun showQuote(context: Context, text: String, author: String) {
+            context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE).edit()
+                .putString("widget_quote", text)
+                .putString("widget_quote_author", author)
+                .apply()
+            updateWidgets(context)
+        }
     }
 
     override fun onUpdate(
@@ -48,6 +58,17 @@ class TimerWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
+        if (!TimerStateStore.isServiceAlive()) {
+            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                TimerStateStore.reconcile(context)
+                withContext(Dispatchers.Main) {
+                    for (appWidgetId in appWidgetIds) {
+                        updateAppWidget(context, appWidgetManager, appWidgetId)
+                    }
+                }
+            }
+            return
+        }
         for (appWidgetId in appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId)
         }
@@ -69,17 +90,24 @@ class TimerWidgetProvider : AppWidgetProvider() {
                     if (!hasPermission) return
                 }
 
-                val now = System.currentTimeMillis()
-                val sessionType = when (catType) {
-                    "LEARNING" -> "LEARNING"
-                    "EXERCISE" -> "EXERCISE"
-                    "SOCIAL" -> "SOCIAL"
-                    "WASTED" -> "WASTED"
-                    else -> "ACTIVITY"
-                }
-
                 val db = (context.applicationContext as SoulTrackApp).database
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                    val alreadyRunning = db.sessionDao().getActiveSessionSync()
+                    if (alreadyRunning != null) {
+                        TimerStateStore.reconcile(context)
+                        withContext(Dispatchers.Main) { updateAllWidgets(context) }
+                        return@launch
+                    }
+
+                    val now = System.currentTimeMillis()
+                    val sessionType = when (catType) {
+                        "LEARNING" -> "LEARNING"
+                        "EXERCISE" -> "EXERCISE"
+                        "SOCIAL" -> "SOCIAL"
+                        "WASTED" -> "WASTED"
+                        else -> "ACTIVITY"
+                    }
+
                     db.sessionDao().deactivateAllSessions(now)
 
                     val categoryId = db.categoryDao().getIdByName(catName)
@@ -95,30 +123,22 @@ class TimerWidgetProvider : AppWidgetProvider() {
                     )
                     val sessionId = db.sessionDao().insert(session)
 
-                    prefs.edit()
-                        .putBoolean("is_running", true)
-                        .putLong("start_time", now)
-                        .putLong("session_id", sessionId)
-                        .putString("session_name", "Quick Session")
-                        .putString("category_name", catName)
-                        .putString("category_type", catType)
-                        .apply()
+                    val state = TimerStateStore.TimerState(
+                        isRunning = true,
+                        startTime = now,
+                        sessionId = sessionId,
+                        title = "Quick Session",
+                        categoryName = catName,
+                        categoryType = catType,
+                        source = "WIDGET",
+                        autoDnd = catType == "PRODUCTIVE" || catType == "LEARNING"
+                    )
+                    TimerStateStore.publish(context, state)
 
-                    val startIntent = Intent(context, TimerForegroundService::class.java).apply {
-                        putExtra(TimerForegroundService.EXTRA_START_TIME, now)
-                        putExtra(TimerForegroundService.EXTRA_TITLE, "Quick Session")
-                        putExtra(TimerForegroundService.EXTRA_CATEGORY, catName)
-                        putExtra(TimerForegroundService.EXTRA_CATEGORY_TYPE, catType)
-                    }
                     withContext(Dispatchers.Main) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            context.startForegroundService(startIntent)
-                        } else {
-                            context.startService(startIntent)
-                        }
+                        TimerStateStore.startTimerService(context, state)
+                        updateAllWidgets(context)
                     }
-
-                    updateAllWidgets(context)
                 }
 
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
@@ -136,45 +156,36 @@ class TimerWidgetProvider : AppWidgetProvider() {
             }
 
             ACTION_STOP -> {
-                val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
                 val now = System.currentTimeMillis()
-
-                stopTimerService(context)
+                val targetSessionId = TimerStateStore.load(context).sessionId
+                val accepted = TimerStateStore.requestStop(context, targetSessionId)
 
                 val db = (context.applicationContext as SoulTrackApp).database
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
-                    runCatching { db.sessionDao().stopActiveSession(now) }
+                    if (!accepted) {
+                        runCatching { db.sessionDao().stopActiveSession(now) }
+                    }
+                    runCatching { TimerStateStore.clear(context) }
+                    withContext(Dispatchers.Main) { updateAllWidgets(context) }
                 }
-
-                prefs.edit()
-                    .putBoolean("is_running", false)
-                    .putLong("session_id", -1L)
-                    .apply()
-
-                updateAllWidgets(context)
             }
 
             ACTION_RESET -> {
-                val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
                 val now = System.currentTimeMillis()
-
-                stopTimerService(context)
+                val targetSessionId = TimerStateStore.load(context).sessionId
+                TimerStateStore.requestStop(context, targetSessionId)
 
                 val db = (context.applicationContext as SoulTrackApp).database
                 CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                     runCatching { db.sessionDao().stopActiveSession(now) }
+                    TimerStateStore.publish(
+                        context,
+                        TimerStateStore.TimerState(
+                            title = "Ready to start"
+                        )
+                    )
+                    withContext(Dispatchers.Main) { updateAllWidgets(context) }
                 }
-
-                prefs.edit()
-                    .putBoolean("is_running", false)
-                    .putLong("start_time", 0L)
-                    .putLong("session_id", -1L)
-                    .putString("session_name", "Ready to start")
-                    .putString("category_name", "")
-                    .putString("category_type", "")
-                    .apply()
-
-                updateAllWidgets(context)
             }
 
             ACTION_CYCLE_CATEGORY -> {
@@ -202,18 +213,15 @@ class TimerWidgetProvider : AppWidgetProvider() {
             }
 
             ACTION_UPDATE -> {
-                updateAllWidgets(context)
+                if (!TimerStateStore.isServiceAlive()) {
+                    CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                        TimerStateStore.reconcile(context)
+                        withContext(Dispatchers.Main) { updateAllWidgets(context) }
+                    }
+                } else {
+                    updateAllWidgets(context)
+                }
             }
-        }
-    }
-
-    private fun stopTimerService(context: Context) {
-        val stopIntent = Intent(context, TimerForegroundService::class.java).apply {
-            action = TimerForegroundService.ACTION_STOP
-        }
-        val started = runCatching { context.startService(stopIntent) }.isSuccess
-        if (!started) {
-            runCatching { context.stopService(Intent(context, TimerForegroundService::class.java)) }
         }
     }
 
@@ -239,11 +247,11 @@ class TimerWidgetProvider : AppWidgetProvider() {
         val views = RemoteViews(context.packageName, R.layout.widget_timer)
 
         val prefs = context.getSharedPreferences("widget_prefs", Context.MODE_PRIVATE)
-        val isRunning = prefs.getBoolean("is_running", false)
-        val sessionName = prefs.getString("session_name", "Ready to start") ?: "Ready to start"
-        val categoryName = prefs.getString("category_name", "") ?: ""
-        val categoryType = prefs.getString("category_type", "") ?: ""
-        val startTime = prefs.getLong("start_time", 0L)
+        val state = TimerStateStore.load(context)
+        val isRunning = state.isRunning
+        val sessionName = state.title.ifBlank { "Ready to start" }
+        val categoryName = state.categoryName
+        val startTime = state.startTime
         val categoryIndex = prefs.getInt("category_index", 0)
         val quote = prefs.getString("widget_quote", "") ?: ""
         val quoteAuthor = prefs.getString("widget_quote_author", "") ?: ""

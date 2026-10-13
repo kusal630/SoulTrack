@@ -1,5 +1,86 @@
 # Changelog
 
+## [2.3.0] - 2026-10-13
+
+### Added
+- **AMOLED design system.** Dark mode is now true black (`#000000`) with a
+  five-step surface ladder instead of shadows; light mode is a matching warm
+  white ladder. One card shape (20dp), one rhythm (16/12/24dp) and one
+  typography scale across the app.
+- **Component kit** (`ui/components/ScreenScaffold.kt`, `ModernCards.kt`):
+  `ScreenList`/`ScreenScaffold` for consistent chrome, `SurfaceCard`,
+  `PressableCard`, `ScreenSection`, `SectionTitle`, `StatTile`, `KeyValueRow`,
+  `PillChip`, `PrimaryCta`/`TonalCta`/`GhostCta`, `EmptyState`, `Hairline`,
+  `IconRow`, plus spacing (`Dimens`) and motion (`Motion`) tokens.
+- **Explore hub.** Twelve screens that existed but could never be opened are
+  now reachable: Sleep, Exercise, Nutrition, Body, Journal, Goals, Reminders,
+  History, Analytics, Focus mode, Achievements and Weekly report — plus
+  cross-links from Growth (Body, Goals, History, Analytics, Achievements) and
+  Insights (Weekly report). Linked from the Home top bar and Settings.
+- Analytics is now a real screen: seven-day time distribution pie, per-day
+  productivity bars and a growth-score ring built from actual data, with an
+  empty state before any data exists.
+- Goals, Reminders, Achievements and Weekly report are wired to real
+  Room-backed state in `MainViewModel` instead of being dead composables.
+
+### Changed
+- Every screen restyled: `ScreenList`/`ScreenScaffold` headers, `SurfaceCard`
+  containers, pill buttons, tinted icon-disc empty states, and no more
+  placeholder copy ("charts will appear here").
+- Bottom navigation: hairline-topped `surfaceContainer` bar with a 16%-alpha
+  pill indicator and a clearer selected/unselected color pair.
+- Chart tracks are `surfaceContainerHighest` instead of `Color.Gray`, so they
+  read correctly on black.
+- Focus mode, onboarding, gamification and the weekly report were redesigned
+  to the same tokens as the rest of the app.
+- `RESEARCH/DESIGN.md` rewritten to describe the shipped system.
+
+## [2.2.0] - 2026-10-13
+
+### Fixed
+- Timer, widget, pomodoro and the notification now read one single source of
+  truth (`TimerStateStore`), so the widget no longer freezes or shows a stale
+  session after the app process is killed.
+- Every stop path (timer screen, widget, notification, pomodoro) sends an
+  explicit session id; a stop can no longer race and kill a session that was
+  started a moment later.
+- The app reconciles its saved timer state with the real session on the
+  database at launch: an orphaned service is restarted, a dead one is cleaned
+  up, and the widget is repainted.
+- Do Not Disturb is enabled only for Productive/Learning sessions or
+  deep-focus picks, and is always restored when a session ends or the service
+  dies - including when the app is force-stopped.
+
+### Added
+- **Intelligent task recommendation layer** (`engine/BrainLayer`): ranks every
+  open task into one "Right now" pick plus alternatives, with a one-line human
+  reason. Weights urgency, priority, focus fit, personal behaviour, history
+  and effort; deadline and high priority are hard weights that can never be
+  buried. Works with zero training history.
+- **Focusability estimator** (`engine/FocusabilityEngine`): 0-100 score for
+  how deep a moment is, from time of day, day of week, break/session length,
+  ambient quietness and mood/energy, with reason strings.
+- **Personal behaviour profile** (`engine/BehaviorProfile` + `BehaviorProfiler`):
+  shrinks toward a neutral prior until enough data exists, so cold start
+  behaves correctly instead of randomly.
+- Dashboard "Right now" card: focus meter, environment line, primary
+  suggestion with reason, two alternatives, and Start / Done actions. Deep
+  focus picks turn Do Not Disturb on automatically.
+- **Focus & Permissions settings**: one section to grant Do Not Disturb
+  access, grant the microphone, and switch recommendations on or off.
+- Ambient noise sensing (`service/NoiseMonitor`): an opt-in microphone read
+  that produces only a 0-100 quietness number. Audio is never recorded to a
+  file, stored or transmitted; it listens only while a focus session runs and
+  stops with it.
+- Timer foreground service gained `ACTION_DND_CHANGED`, session-id extras and
+  auto-Do-Not-Disturb support.
+
+### Changed
+- Quote display now rotates through a shuffle pool of the 89 "best" quotes
+  (Bhagavad Gita, Stoics, world classics) on app start, without repeats inside
+  a process, and pushes the current quote to both widgets.
+- Additional Gita verses and world-book quotes added to the offline pool.
+
 ## [2.1.0] - 2026-10-09
 
 ### Fixed

@@ -25,8 +25,14 @@ Chosen over DataStore for complex relational data (sessions, food entries, etc.)
 ### Foreground Service for Timer
 Ensures timer survives background and process death. Database timestamps used as source of truth.
 
-### No ML Dependencies
-ML features deferred to keep the app F-Droid friendly and avoid large binary dependencies. Heuristic features provide similar functionality.
+### ML: on-device, small, local-only
+v1/v2 deferred ML to keep the app F-Droid friendly and avoid large binary
+dependencies; heuristic engines provided similar functionality. v3 reopens ML
+**only** for the intelligent task recommendation layer: small tabular models
+(mood predictor, task-context performance) trained and inferred entirely on
+device from the local Room database. No Play Services, no Firebase, no cloud
+inference, no large bundled binaries. Heuristics remain the fallback so the
+feature works with zero training history. See `MODEL_CARDS.md`.
 
 ## Algorithm Decisions
 
