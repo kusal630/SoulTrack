@@ -38,6 +38,21 @@ data class GrowthWeights(
     val consistency: Double = 0.05
 )
 
+/**
+ * What "enough" means for each component.
+ *
+ * The defaults are the cold-start prior; [io.github.dailytrack.ui.viewmodel.MainViewModel]
+ * replaces them with the user's own targets (Settings) or, when no target was
+ * set, with their own trailing two weeks of history.
+ */
+data class GrowthTargets(
+    val learningMinutes: Double = GrowthEngine.TARGET_LEARNING_MINUTES,
+    val productiveMinutes: Double = GrowthEngine.TARGET_PRODUCTIVE_MINUTES,
+    val exerciseMinutes: Double = GrowthEngine.TARGET_EXERCISE_MINUTES,
+    val socialMinutes: Double = GrowthEngine.TARGET_SOCIAL_MINUTES,
+    val sleepBand: ClosedFloatingPointRange<Double> = 6.0..9.0
+)
+
 class GrowthEngine(private val weights: GrowthWeights = GrowthWeights()) {
 
     fun calculateGrowthScore(
@@ -47,7 +62,8 @@ class GrowthEngine(private val weights: GrowthWeights = GrowthWeights()) {
         sleepHours: Double,
         socialMinutes: Double,
         noveltyScore: Double,
-        consecutiveDaysActive: Int
+        consecutiveDaysActive: Int,
+        targets: GrowthTargets = GrowthTargets()
     ): GrowthScoreResult {
         val hasAnyActivity = learningMinutes > 0 || productiveMinutes > 0 ||
                 exerciseMinutes > 0 || sleepHours > 0 || socialMinutes > 0
@@ -65,20 +81,23 @@ class GrowthEngine(private val weights: GrowthWeights = GrowthWeights()) {
             )
         }
 
-        val learningScore = cappedNormalized(learningMinutes, TARGET_LEARNING_MINUTES)
-        val productiveScore = cappedNormalized(productiveMinutes, TARGET_PRODUCTIVE_MINUTES)
-        val exerciseScore = cappedNormalized(exerciseMinutes, TARGET_EXERCISE_MINUTES)
-        val socialScore = cappedNormalized(socialMinutes, TARGET_SOCIAL_MINUTES)
+        val learningScore = cappedNormalized(learningMinutes, targets.learningMinutes)
+        val productiveScore = cappedNormalized(productiveMinutes, targets.productiveMinutes)
+        val exerciseScore = cappedNormalized(exerciseMinutes, targets.exerciseMinutes)
+        val socialScore = cappedNormalized(socialMinutes, targets.socialMinutes)
 
+        val bandLow = targets.sleepBand.start
+        val bandHigh = targets.sleepBand.endInclusive
         val sleepScore = when {
             sleepHours <= 0.0 -> 0.0
-            sleepHours in 6.0..9.0 -> 1.0
-            sleepHours in 5.0..<6.0 -> 0.6
-            sleepHours in 9.0..<10.0 -> 0.8
-            sleepHours < 5.0 -> 0.3
+            sleepHours in bandLow..bandHigh -> 1.0
+            sleepHours in (bandLow - 1.0)..<bandLow -> 0.6
+            sleepHours in bandHigh..<(bandHigh + 1.0) -> 0.8
+            sleepHours < bandLow - 1.0 -> 0.3
             else -> 0.5
         }
 
+        // Novelty is always 0..1; callers on the 0..100 engine scale divide first.
         val noveltyVal = if (hasAnyActivity) noveltyScore.coerceIn(0.0, 1.0) else 0.0
         val consistencyVal = (consecutiveDaysActive.toDouble() / 7.0).coerceAtMost(1.0)
 
@@ -136,6 +155,27 @@ class GrowthEngine(private val weights: GrowthWeights = GrowthWeights()) {
     }
 
     companion object {
+        /**
+         * The weights for the layer the user enabled. With health off the
+         * sleep/exercise share moves to the productivity components instead
+         * of silently scoring zeros, so the score stays meaningful.
+         */
+        fun weightsFor(healthEnabled: Boolean): GrowthWeights =
+            if (healthEnabled) {
+                GrowthWeights()
+            } else {
+                GrowthWeights(
+                    learning = 0.30,
+                    productive = 0.30,
+                    exercise = 0.0,
+                    sleep = 0.0,
+                    social = 0.10,
+                    novelty = 0.15,
+                    consistency = 0.15
+                )
+            }
+
+        /** Cold-start priors, replaced as soon as user history or a user target exists. */
         const val TARGET_LEARNING_MINUTES = 120.0
         const val TARGET_PRODUCTIVE_MINUTES = 240.0
         const val TARGET_EXERCISE_MINUTES = 60.0

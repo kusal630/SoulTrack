@@ -61,11 +61,21 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(navController: NavController) {
     val context = LocalContext.current
-    var productiveMinutes by remember { mutableStateOf("60") }
-    var learningMinutes by remember { mutableStateOf("30") }
-    var exerciseMinutes by remember { mutableStateOf("30") }
-    var sleepTarget by remember { mutableStateOf("8") }
-    var maintenanceMode by remember { mutableStateOf(false) }
+    // Empty string means "auto": the app then calibrates from your own history.
+    var productiveMinutes by remember {
+        mutableStateOf(ProductTargets.productiveMinutes.takeIf { it > 0 }?.toString() ?: "")
+    }
+    var learningMinutes by remember {
+        mutableStateOf(ProductTargets.learningMinutes.takeIf { it > 0 }?.toString() ?: "")
+    }
+    var exerciseMinutes by remember {
+        mutableStateOf(ProductTargets.exerciseMinutes.takeIf { it > 0 }?.toString() ?: "")
+    }
+    var sleepTarget by remember {
+        mutableStateOf(ProductTargets.sleepHours.takeIf { it > 0f }?.toString() ?: "")
+    }
+    var maintenanceMode by remember { mutableStateOf(ProductTargets.maintenanceMode) }
+    var healthEnabled by remember { mutableStateOf(AppFeatures.healthEnabled) }
     var apiQuotesEnabled by remember { mutableStateOf(QuotesApi.isApiEnabled()) }
     var wasteModeEnabled by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -141,16 +151,58 @@ fun SettingsScreen(navController: NavController) {
 
         item {
             SettingsSection(title = "Targets", icon = Icons.Default.Flag) {
-                TargetInput("Productive minutes/day", productiveMinutes) { productiveMinutes = it }
-                TargetInput("Learning minutes/day", learningMinutes) { learningMinutes = it }
-                TargetInput("Exercise minutes/day", exerciseMinutes) { exerciseMinutes = it }
-                TargetInput("Sleep target (hours)", sleepTarget) { sleepTarget = it }
+                Text(
+                    "Leave a field empty and the target is calibrated from your own tracked days.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                TargetInput("Productive minutes/day", productiveMinutes) {
+                    productiveMinutes = it
+                    it.filter(Char::isDigit).toIntOrNull()
+                        ?.let { v -> ProductTargets.setProductiveMinutes(v, context) }
+                }
+                TargetInput("Learning minutes/day", learningMinutes) {
+                    learningMinutes = it
+                    it.filter(Char::isDigit).toIntOrNull()
+                        ?.let { v -> ProductTargets.setLearningMinutes(v, context) }
+                }
+                TargetInput("Exercise minutes/day", exerciseMinutes) {
+                    exerciseMinutes = it
+                    it.filter(Char::isDigit).toIntOrNull()
+                        ?.let { v -> ProductTargets.setExerciseMinutes(v, context) }
+                }
+                TargetInput("Sleep target (hours)", sleepTarget) {
+                    sleepTarget = it
+                    it.filter { c -> c.isDigit() || c == '.' }.toFloatOrNull()
+                        ?.let { v -> ProductTargets.setSleepHours(v, context) }
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "Features", icon = Icons.Default.FavoriteBorder) {
+                Text(
+                    "Soul Track is a time tracker first. Sleep, exercise, nutrition and the body "
+                        + "dashboard are optional - turning them off stops the health targets, "
+                        + "health insights and growth weights, and your history stays untouched.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                PrivacySwitch("Health & body layer", Icons.Default.FavoriteBorder, healthEnabled) {
+                    healthEnabled = it
+                    AppFeatures.setHealthEnabled(it, context)
+                }
             }
         }
 
         item {
             SettingsSection(title = "Privacy", icon = Icons.Default.Shield) {
-                PrivacySwitch("Maintenance mode", Icons.Default.Pause, maintenanceMode) { maintenanceMode = it }
+                PrivacySwitch("Maintenance mode", Icons.Default.Pause, maintenanceMode) {
+                    maintenanceMode = it
+                    ProductTargets.setMaintenanceMode(it, context)
+                }
             }
         }
 

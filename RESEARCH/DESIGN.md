@@ -167,9 +167,10 @@ inside content.
 
 - **Today** (`DashboardScreen`) — `TodayHero` (260dp `SoulRings` + counts +
   status legend), tracker chips with tabular timers, `UpNextCard`
-  (gradient border, reason chips, FocusBadge, Start / Not now), today's task
-  rows with swipe-to-complete, one `PrimaryCta`, comfort zone, time
-  breakdown, History/Insights shortcuts.
+  (gradient border, reason chips, FocusBadge, Start / Not now), a
+  `JumpAttentionCard` (`WastedColor` hairline) once work has jumped context
+  three times, today's task rows with swipe-to-complete, one `PrimaryCta`,
+  comfort zone, time breakdown, History/Insights shortcuts.
 - **Tasks** (`TodoScreen`) — progress overview built on `MiniSoulRing`,
   priority chips carry an icon **and** a weight, swipe-left completes and
   springs back.
@@ -178,13 +179,20 @@ inside content.
   via `FocusDndManager`.
 - **Insights** (`InsightsScreen`) — growth score in a mint→aqua→sky arc with a
   trend delta, seven status bars for the week, concentric comfort-zone rings,
-  stacked time bar (wasted `#FF5D6C`), gradient productivity trend.
+  a `SwitchCostCard` (0-100 index badge, tasks dropped, back-after minutes,
+  focus after a jump vs baseline, seven jump bars), stacked time bar (wasted
+  `#FF5D6C`), gradient productivity trend.
 - **History** (`HistoryScreen`) — seven `MiniSoulRing`s, tap a day → verdict
   card (icon + word + reason), 24h second-by-second timeline bar, that day's
   sessions.
 - **Settings** (`SettingsScreen`) — Appearance (AMOLED / Soft dark / Light /
   System, dynamic colour on Android 12+), Day ring thresholds, focus
-  permissions, targets, data.
+  permissions, editable **Targets** (empty = calibrated from your own
+  history), **Features** (health & body layer on/off), maintenance mode,
+  data.
+- **Onboarding** (`OnboardingScreen`) — page 0 is a real choice, not an
+  illustration: *Time & tasks* vs *Time, tasks & health*, written straight to
+  `AppFeatures`.
 
 ## Navigation
 Bottom bar: Home, Timer, Tasks, Focus, Insights — 80dp, `surfaceContainer`
@@ -209,6 +217,13 @@ Primary pill 56dp gradient; secondary tonal; tertiary outlined with
 ### Empty states
 Icon disc (64dp, tint at 14%) → title → description → optional action.
 Never blank space.
+
+### Data honesty
+No card, chart or insight repeats a sentence that the user's own records do
+not support: a target the user never set reads "your own average", a domain
+with no logs reads "Not tracked yet", and a metric with too little data is
+`null` rather than a borrowed default. Canned copy ("You've been most
+productive on Tuesdays") is banned outright.
 
 ## Motion principles
 1. Purposeful — every animation serves a function.

@@ -54,6 +54,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.dailytrack.engine.TimeCoverage
+import io.github.dailytrack.ui.settings.AppFeatures
+import java.time.format.TextStyle
+import java.util.Locale
 import io.github.dailytrack.ui.components.EmptyState
 import io.github.dailytrack.ui.components.KeyValueRow
 import io.github.dailytrack.ui.components.ScreenList
@@ -99,14 +102,17 @@ fun WeeklyReportScreen(
                 DailyBreakdownCard(weeklyData = weeklyData)
             }
 
-            item {
-                InsightsCard(
-                    insights = listOf(
-                        "You've been most productive on Tuesdays",
-                        "Consider adding more exercise time",
-                        "Your sleep schedule has been consistent"
+            val weekInsights = weeklyInsights(weeklyData)
+            if (weekInsights.isEmpty()) {
+                item {
+                    InsightsCard(
+                        insights = listOf(
+                            "Track a full day and this card reads your week back to you."
+                        )
                     )
-                )
+                }
+            } else {
+                item { InsightsCard(insights = weekInsights) }
             }
         }
 
@@ -200,7 +206,7 @@ private fun WeeklyOverviewCard(weeklyData: Map<LocalDate, TimeCoverage>) {
     val productiveHours =
         weeklyData.values.sumOf { it.productiveSeconds + it.learningSeconds } / 3600.0
     val exerciseHours = weeklyData.values.sumOf { it.exerciseSeconds } / 3600.0
-    val wastedHours = weeklyData.values.sumOf { it.wastedSeconds } / 3600.0
+    val wastedHours = weeklyData.values.sumOf { it.totalWastedSeconds } / 3600.0
 
     ScreenSection(
         title = "Weekly overview",
@@ -276,6 +282,53 @@ private fun DailyBreakdownCard(weeklyData: Map<LocalDate, TimeCoverage>) {
             }
         }
     }
+}
+
+/**
+ * Reads the seven-day map the user actually tracked. Nothing here is a
+ * canned observation: each line is only written when the data supports it.
+ */
+private fun weeklyInsights(data: Map<LocalDate, TimeCoverage>): List<String> {
+    if (data.isEmpty()) return emptyList()
+    val out = mutableListOf<String>()
+
+    val trackedDays = data.values.count { it.trackedSeconds > 0 }
+    if (trackedDays == 0) return emptyList()
+    out += "You tracked $trackedDays of ${data.size} days"
+
+    fun dayName(d: LocalDate) =
+        d.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+
+    data.values.filter { it.totalProductiveSeconds > 0 }
+        .maxByOrNull { it.totalProductiveSeconds }
+        ?.let {
+            out += "Your strongest day was ${dayName(it.date)} " +
+                "(${it.totalProductiveSeconds / 60} focused minutes)"
+        }
+
+    val learned = data.values.sumOf { it.learningSeconds }
+    if (learned >= 45 * 60) {
+        out += "You logged ${learned / 3600}h ${learned % 3600 / 60}m of learning this week"
+    }
+
+    data.values.filter { it.trackedSeconds > 0 }
+        .maxByOrNull { it.wasteRatio }
+        ?.let {
+            val share = (it.wasteRatio * 100).toInt()
+            if (share >= 20) out += "${dayName(it.date)} lost $share% of tracked time to low-value time"
+        }
+
+    if (AppFeatures.healthEnabled) {
+        val moved = data.values.count { it.exerciseSeconds > 0 }
+        if (moved >= 2) out += "Movement logged on $moved days"
+        val slept = data.values.count { it.sleepSeconds > 0 }
+        if (slept >= 3) out += "Sleep logged on $slept nights, so the trend is worth watching"
+    }
+
+    val streak = data.values.count { it.trackedSeconds > 0 }
+    if (streak >= data.size) out += "A clean week: every day had tracked time"
+
+    return out.take(5)
 }
 
 @Composable

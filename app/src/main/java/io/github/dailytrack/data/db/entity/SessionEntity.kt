@@ -43,6 +43,8 @@ data class SessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String = "",
     val categoryId: Long? = null,
+    /** The task this session belongs to, when it was started from a todo. */
+    val todoId: Long? = null,
     val type: String = "ACTIVITY",
     val startTime: Long,
     val endTime: Long? = null,

@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -42,6 +43,7 @@ import io.github.dailytrack.data.db.entity.TodoEntity
 import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.ui.components.*
 import io.github.dailytrack.ui.components.dayProgressFor
+import io.github.dailytrack.ui.theme.Dimens
 import io.github.dailytrack.ui.theme.ExerciseColor
 import io.github.dailytrack.ui.theme.ProductiveColor
 import io.github.dailytrack.ui.navigateToHome
@@ -75,6 +77,7 @@ fun TodoScreen(
     var pendingPomodoroTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showClearCompletedDialog by remember { mutableStateOf(false) }
+    var showLogWorkDialog by remember { mutableStateOf(false) }
 
     val today = java.time.LocalDate.now()
     val allTodos = remember(activeTodos, completedTodos) { activeTodos + completedTodos }
@@ -235,7 +238,8 @@ fun TodoScreen(
                 item {
                     EmptyState(
                         title = "No tasks yet",
-                        message = "Assigning a task starts the day ring - the inner arc fills as you finish each one.",
+                        message = "Every task you finish and every minute you track feeds the day ring. " +
+                            "Add one, start a timer, or write down work you already did.",
                         icon = Icons.Default.CheckCircle,
                         actionLabel = "Add task",
                         onAction = { showAddDialog = true }
@@ -244,12 +248,35 @@ fun TodoScreen(
             }
 
             item {
-                PrimaryCta(
-                    text = "Add task",
-                    icon = Icons.Default.Add,
-                    onClick = { showAddDialog = true }
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Dimens.CardGap)
+                ) {
+                    PrimaryCta(
+                        text = "Add task",
+                        icon = Icons.Default.Add,
+                        onClick = { showAddDialog = true },
+                        modifier = Modifier.weight(1f)
+                    )
+                    GhostCta(
+                        text = "Log done work",
+                        icon = Icons.Default.History,
+                        onClick = { showLogWorkDialog = true },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
+    }
+
+    if (showLogWorkDialog) {
+        LogCompletedWorkDialog(
+            categories = categories,
+            onDismiss = { showLogWorkDialog = false },
+            onLog = { title, minutes, categoryId ->
+                viewModel.logCompletedWork(title, minutes, categoryId)
+                showLogWorkDialog = false
+            }
+        )
     }
 
     if (showClearCompletedDialog) {
@@ -600,7 +627,10 @@ fun TodoItemCard(
                     Text(
                         text = todo.title,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     if (priorityLabel.isNotBlank()) {
                         Spacer(modifier = Modifier.width(6.dp))
@@ -893,6 +923,97 @@ fun EditTodoDialog(
                 },
                 enabled = title.isNotBlank()
             ) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/**
+ * Backfill: work the user already finished and only now wrote down.
+ * Writes the task *and* the recorded minutes, so the ring, growth, loops and
+ * insights treat it exactly like a tracked session.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LogCompletedWorkDialog(
+    categories: Map<Long, io.github.dailytrack.data.db.entity.CategoryEntity>,
+    onDismiss: () -> Unit,
+    onLog: (String, Int, Long?) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var minutes by remember { mutableStateOf("25") }
+    var selectedCategoryId by remember { mutableLongStateOf(0L) }
+    var showCategoryDropdown by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Log completed work") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Write down a block you already finished. It counts as tracked " +
+                        "time, not as untracked waste.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("What did you finish? *") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = minutes,
+                    onValueChange = { minutes = it.filter { c -> c.isDigit() } },
+                    label = { Text("Approximate minutes *") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                ExposedDropdownMenuBox(
+                    expanded = showCategoryDropdown,
+                    onExpandedChange = { showCategoryDropdown = it }
+                ) {
+                    OutlinedTextField(
+                        value = categories[selectedCategoryId]?.name ?: "No category",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Type of work") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showCategoryDropdown) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = showCategoryDropdown,
+                        onDismissRequest = { showCategoryDropdown = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("No category") },
+                            onClick = { selectedCategoryId = 0L; showCategoryDropdown = false }
+                        )
+                        categories.values.filter { !it.archived }.forEach { category ->
+                            DropdownMenuItem(
+                                text = { Text(category.name) },
+                                onClick = { selectedCategoryId = category.id; showCategoryDropdown = false }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val mins = minutes.toIntOrNull() ?: 0
+                    if (title.isNotBlank() && mins > 0) {
+                        onLog(
+                            title.trim(),
+                            mins,
+                            selectedCategoryId.takeIf { it > 0L }
+                        )
+                    }
+                },
+                enabled = title.isNotBlank() && (minutes.toIntOrNull() ?: 0) > 0
+            ) { Text("Log it") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )

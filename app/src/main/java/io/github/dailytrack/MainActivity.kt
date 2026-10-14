@@ -50,6 +50,8 @@ import io.github.dailytrack.ui.components.SoulRings
 import io.github.dailytrack.ui.components.rememberReduceMotion
 import io.github.dailytrack.ui.theme.*
 import io.github.dailytrack.ui.onboarding.OnboardingScreen
+import io.github.dailytrack.ui.settings.AppFeatures
+import io.github.dailytrack.ui.settings.ProductTargets
 import io.github.dailytrack.widget.QuoteWidgetProvider
 import kotlinx.coroutines.delay
 
@@ -66,6 +68,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         ThemeSettings.load(this)
+        AppFeatures.load(this)
+        ProductTargets.load(this)
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             enableEdgeToEdge()

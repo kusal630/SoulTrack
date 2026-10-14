@@ -46,6 +46,10 @@ data class BrainInputs(
     val behavior: BehaviorProfile,
     val mood: Int? = null,
     val energy: Int? = null,
+    /** Task a session is running for right now, if any. */
+    val activeTaskId: Long? = null,
+    /** Tasks the user jumped away from today - they stay in view, not buried. */
+    val abandonedTaskIds: Set<Long> = emptySet(),
     val zone: ZoneId = ZoneId.systemDefault()
 ) {
     val hourOfDay: Int get() = Instant.ofEpochMilli(now).atZone(zone).hour
@@ -116,6 +120,20 @@ class BrainLayer {
             W_BEHAVIOR * behaviorScore +
             W_HISTORY * historyScore +
             W_EFFORT * effortScore
+
+        // Finish the context already open before starting a new one.
+        if (inputs.activeTaskId != null && task.id == inputs.activeTaskId) {
+            total = max(total, 92.0)
+        }
+        // A task the user jumped away from is surfaced, not forgotten.
+        if (task.id in inputs.abandonedTaskIds) total += 6.0
+        // Mood and energy bend the effort choice only, never urgency.
+        inputs.energy?.let { energy ->
+            when {
+                energy <= 2 && task.estimatedMinutes >= 30 -> total -= 8.0
+                energy >= 4 && task.estimatedMinutes in 15..90 -> total += 4.0
+            }
+        }
 
         // Hard weight: a deadline that is close is never buried by the model.
         val hoursLeft = task.deadline?.let { (it - inputs.now) / 3_600_000.0 }
@@ -199,6 +217,10 @@ class BrainLayer {
         behavior: Double
     ): String {
         val parts = mutableListOf<String>()
+        when {
+            inputs.activeTaskId == task.id -> parts.add("already in flight - finish this one first")
+            task.id in inputs.abandonedTaskIds -> parts.add("you jumped away from this one")
+        }
         val hoursLeft = task.deadline?.let { (it - inputs.now) / 3_600_000.0 }
         when {
             hoursLeft != null && hoursLeft < 0 -> parts.add("overdue")

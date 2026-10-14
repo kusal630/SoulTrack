@@ -2,7 +2,12 @@
 
 **Offline-first, privacy-first life tracking Android app — built around the ring.**
 
-Soul Track helps you track your time, food, sleep, exercise, mood, and growth — all stored locally on your device with no cloud accounts, no ads, no tracking.
+Soul Track is a **time tracker first**: every second you track feeds the day
+ring, the growth score, the routine/comfort-zone detection and the insights.
+Sleep, food, exercise and the body dashboard are an **optional layer** you can
+switch on during onboarding (or off again in Settings) — and every number the
+app shows is computed from your own records. Nothing is stored in the cloud,
+there are no accounts, no ads and no tracking.
 
 ## The rings
 
@@ -37,12 +42,21 @@ aqua → sky gradient and Manrope typography. See [RESEARCH/DESIGN.md](RESEARCH/
   Android 12+
 - **Focus sessions**: aqua work ring, sky break ring, keep-screen-on, optional
   Do Not Disturb
+- **Task switch detection**: when a session jumps to another task within five
+  minutes, the jump is counted, the dropped task stays in view, and Insights
+  shows the resumption delay plus focus after a jump vs the rest of the day
+  (the "hallucination" index, 0-100)
+- **Intelligent task recommendation**: the Dashboard picks the next task from
+  your own history, the current focus level, mood and energy — and always
+  prefers the task already in flight over starting a new context
+- **Optional health layer**: sleep, exercise, nutrition, hydration and the
+  body dashboard are asked about once at start and toggled in Settings;
+  turning them off redistributes the growth weights instead of scoring zeros
+- **Your own targets**: productive/learning/exercise minutes, sleep hours,
+  water and pomodoro goals are set in Settings, and anything you leave empty
+  is calibrated from your own trailing fortnight
 
 ### Planned
-- **Intelligent Task Recommendation**: recommends the right task for the
-  current focus level and environment — low-focus tasks when it's noisy,
-  deep-work tasks when it's calm — trained on-device from your mood check-ins
-  and task history, always weighted by task priority
 - **Persistent Task Reminders**: an ongoing notification that keeps your due
   task visible and re-reminds until it's done or snoozed
 
@@ -53,7 +67,7 @@ aqua → sky gradient and Manrope typography. See [RESEARCH/DESIGN.md](RESEARCH/
 - No telemetry or analytics
 - No ads
 - No proprietary dependencies
-- Sensitive health tracking is opt-in
+- Sensitive health tracking is opt-in and toggleable at any time
 - Medical disclaimer displayed throughout
 
 ## Medical Disclaimer

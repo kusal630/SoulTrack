@@ -55,6 +55,13 @@ object Dimens {
 
     /** Compact SoulRings used in history rows and the widget preview. */
     val MiniRing = 72.dp
+
+    /**
+     * Widest a single column of content may grow. On phones the screen is
+     * already narrower than this; on tablet portrait it stops task cards and
+     * insights from stretching into unreadable full-bleed slabs.
+     */
+    val ContentMaxWidth = 720.dp
 }
 
 /**

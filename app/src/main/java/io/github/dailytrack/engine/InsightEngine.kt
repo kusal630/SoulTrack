@@ -46,7 +46,8 @@ class InsightEngine {
         sleepHours: Double,
         fatigueLevel: Int,
         severeSymptoms: List<String>,
-        maintenanceMode: Boolean
+        maintenanceMode: Boolean,
+        switchReport: SwitchReport? = null
     ): List<InsightTemplate> {
         val insights = mutableListOf<InsightTemplate>()
 
@@ -178,6 +179,68 @@ class InsightEngine {
                     severity = "INFO",
                     category = "EXERCISE",
                     actionLabel = "Log movement"
+                )
+            )
+        }
+
+        if (switchReport != null && !maintenanceMode) {
+            if (switchReport.switchCount >= 3) {
+                insights.add(
+                    InsightTemplate(
+                        title = "Task switching detected",
+                        message = "You changed context ${switchReport.switchCount} times today. Deep work rarely survives that many jumps - pick one task and close the others.",
+                        severity = "WARNING",
+                        category = "PRODUCTIVITY",
+                        actionLabel = "Finish one task first"
+                    )
+                )
+            }
+            switchReport.averageResumeMinutes?.let { resume ->
+                if (resume >= 20.0) {
+                    insights.add(
+                        InsightTemplate(
+                            title = "Long re-entry after switching",
+                            message = "After a switch you took about ${resume.toInt()} minutes to pick the task back up. Attention residue from the previous task is expensive.",
+                            severity = "CAUTION",
+                            category = "PRODUCTIVITY",
+                            actionLabel = "Try a longer focus block"
+                        )
+                    )
+                }
+            }
+            if (switchReport.switchCount >= 5) {
+                insights.add(
+                    InsightTemplate(
+                        title = "Focus is fragmenting",
+                        message = "Half a dozen or more jumps in one day means the day is steering you. Block the next hour and set one clear target.",
+                        severity = "WARNING",
+                        category = "PRODUCTIVITY",
+                        actionLabel = "Block an hour"
+                    )
+                )
+            }
+        }
+
+        if (noReflectionToday) {
+            insights.add(
+                InsightTemplate(
+                    title = "No reflection logged today",
+                    message = "You usually reflect on this day but nothing is written yet. Two lines are enough to keep the record honest.",
+                    severity = "INFO",
+                    category = "JOURNAL",
+                    actionLabel = "Write a reflection"
+                )
+            )
+        }
+
+        if (fatigueLevel >= 4 && !maintenanceMode) {
+            insights.add(
+                InsightTemplate(
+                    title = "Running low on energy",
+                    message = "Your check-ins show stress or low energy today. Shrink the next block to 25 minutes and take the break.",
+                    severity = "CAUTION",
+                    category = "MOOD",
+                    actionLabel = "Take a short break"
                 )
             )
         }

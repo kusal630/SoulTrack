@@ -46,6 +46,7 @@ import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.InsightEntity
 import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.engine.LoopDetectionResult
+import io.github.dailytrack.engine.SwitchReport
 import io.github.dailytrack.ui.Screen
 import io.github.dailytrack.ui.components.*
 import io.github.dailytrack.ui.components.brandColorAt
@@ -65,6 +66,7 @@ import io.github.dailytrack.ui.theme.SleepColor
 import io.github.dailytrack.ui.theme.SocialColor
 import io.github.dailytrack.ui.theme.WastedColor
 import io.github.dailytrack.ui.navigateToHome
+import io.github.dailytrack.ui.settings.ProductTargets
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import io.github.dailytrack.ui.viewmodel.WeeklyStats
 import java.time.LocalDate
@@ -96,6 +98,8 @@ fun InsightsScreen(
     val activeTodos by viewModel.activeTodos.collectAsState()
     val completedTodos by viewModel.completedTodos.collectAsState()
     val loopStatus by viewModel.loopStatus.collectAsState()
+    val switchReport by viewModel.switchReport.collectAsState()
+    val weeklySwitchCounts by viewModel.weeklySwitchCounts.collectAsState()
     val today = LocalDate.now()
 
     ScreenList(
@@ -140,6 +144,13 @@ fun InsightsScreen(
         }
 
         item {
+            SwitchCostCard(
+                report = switchReport,
+                weeklyCounts = weeklySwitchCounts
+            )
+        }
+
+        item {
             TodoProgressCard(activeCount = activeTodoCount, completedCount = completedTodoCount)
         }
 
@@ -150,8 +161,7 @@ fun InsightsScreen(
         item {
             CategoryBreakdownCard(
                 sessions = todaySessions,
-                categories = categories,
-                pomodoros = todayPomodoros
+                categories = categories
             )
         }
 
@@ -162,7 +172,8 @@ fun InsightsScreen(
         item {
             PomodoroStatsCard(
                 pomodoros = todayPomodoros,
-                weeklyStats = weeklyStats
+                weeklyStats = weeklyStats,
+                dailyGoal = ProductTargets.pomodoroDailyGoal
             )
         }
 
@@ -410,30 +421,24 @@ fun TimeDistributionCard(weeklyStats: WeeklyStats) {
 @Composable
 fun CategoryBreakdownCard(
     sessions: List<io.github.dailytrack.data.db.entity.SessionEntity>,
-    categories: Map<Long, io.github.dailytrack.data.db.entity.CategoryEntity>,
-    pomodoros: List<io.github.dailytrack.data.db.entity.PomodoroSessionEntity>
+    categories: Map<Long, io.github.dailytrack.data.db.entity.CategoryEntity>
 ) {
     val categoryDurations = mutableMapOf<String, Float>()
-    var productiveMinutes = 0f
 
+    // One session row = one slice of the day. A running pomodoro already
+    // mirrors a session (source = "POMODORO"), so pomodoro rows are never
+    // added on top - that used to double every focus block.
+    val now = System.currentTimeMillis()
     for (session in sessions) {
-        if (session.isActive) continue
-        val duration = ((session.endTime ?: System.currentTimeMillis()) - session.startTime) / 60000f
+        val end = if (session.isActive) now else session.endTime ?: continue
+        val duration = ((end - session.startTime) / 60000f).coerceAtLeast(0f)
+        if (duration <= 0f) continue
         val cat = session.categoryId?.let { categories[it] }
-        val catType = cat?.type ?: session.type
-        val label = cat?.name ?: catType
+        val label = cat?.name ?: (cat?.type ?: session.type)
         categoryDurations[label] = (categoryDurations[label] ?: 0f) + duration
-        if (catType in listOf("PRODUCTIVE", "LEARNING", "ACTIVITY")) {
-            productiveMinutes += duration
-        }
     }
 
-    for (p in pomodoros) {
-        if (p.isCompleted && p.type == "WORK") {
-            productiveMinutes += p.durationMinutes
-            categoryDurations["Pomodoro"] = (categoryDurations["Pomodoro"] ?: 0f) + p.durationMinutes
-        }
-    }
+    val totalMinutes = categoryDurations.values.sum()
 
     val slices = categoryDurations.entries
         .sortedByDescending { it.value }
@@ -464,7 +469,7 @@ fun CategoryBreakdownCard(
                         centerContent = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "${productiveMinutes.toInt()}",
+                                    text = "${totalMinutes.toInt()}",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -599,9 +604,11 @@ fun WeeklyTrendCard(dailyProductivity: List<Pair<String, Float>>) {
 @Composable
 fun PomodoroStatsCard(
     pomodoros: List<io.github.dailytrack.data.db.entity.PomodoroSessionEntity>,
-    weeklyStats: WeeklyStats
+    weeklyStats: WeeklyStats,
+    dailyGoal: Int = 0
 ) {
     val completedPomodoros = pomodoros.count { it.isCompleted && it.type == "WORK" }
+    val goal = dailyGoal.takeIf { it > 0 }
     val totalPomodoroMinutes = pomodoros
         .filter { it.isCompleted && it.type == "WORK" }
         .sumOf { it.durationMinutes }
@@ -612,15 +619,20 @@ fun PomodoroStatsCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PieChart(
-                slices = listOf(
+            val slices = if (goal == null) {
+                listOf(PieChartSlice(completedPomodoros.toFloat(), PomodoroRed, "Completed"))
+            } else {
+                listOf(
                     PieChartSlice(completedPomodoros.toFloat(), PomodoroRed, "Completed"),
                     PieChartSlice(
-                        (8 - completedPomodoros.toFloat()).coerceAtLeast(0f),
+                        (goal - completedPomodoros.toFloat()).coerceAtLeast(0f),
                         remainingColor,
                         "Remaining"
-                    ),
-                ),
+                    )
+                )
+            }
+            PieChart(
+                slices = slices,
                 size = 80.dp,
                 strokeWidth = 12.dp,
                 centerContent = {
@@ -654,6 +666,19 @@ fun PomodoroStatsCard(
                             "${totalPomodoroMinutes}min focused",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            if (goal == null) {
+                                "no daily goal set"
+                            } else {
+                                "$completedPomodoros of $goal done"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (goal != null && completedPomodoros >= goal) {
+                                ProductiveGreen
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
                     Column(horizontalAlignment = Alignment.End) {
@@ -1046,4 +1071,153 @@ private fun statusIcon(status: DayStatus?) = when (status) {
     DayStatus.WASTING_TIME -> Icons.Default.LocalFireDepartment
     DayStatus.NO_TASKS -> Icons.Default.Assignment
     else -> Icons.Default.HourglassEmpty
+}
+
+/**
+ * The attention-drift card: how often today's work jumped context, how long
+ * the return took and what that did to focus. Every number is read back from
+ * the user's own sessions - it appears only once something was actually tracked.
+ */
+@Composable
+fun SwitchCostCard(
+    report: SwitchReport,
+    weeklyCounts: List<Int>
+) {
+    if (report.switchCount == 0 && weeklyCounts.none { it > 0 }) return
+
+    val index = report.hallucinationIndex
+    val indexColor = when {
+        index >= 50 -> GradientStart
+        index >= 25 -> ExerciseOrange
+        else -> LearningBlue
+    }
+
+    SurfaceCard {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Focus jumps",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        if (report.switchCount == 0) "No context change today" else "Context changed ${report.switchCount}x today",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Surface(
+                    color = indexColor.copy(alpha = 0.16f),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        "$index",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = indexColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (report.switchCount > 0) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    when {
+                        index >= 50 -> "Your day is steering you: pick one task and close the rest."
+                        index >= 25 -> "More than one thread is open - finishing one pays for itself."
+                        else -> "A few jumps, handled well. The thread is still intact."
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                KeyValueRow(
+                    label = "Tasks dropped",
+                    value = "${report.abandonedTaskCount}"
+                )
+                report.averageResumeMinutes?.let { resume ->
+                    KeyValueRow(
+                        label = "Back after",
+                        value = "${resume.toInt()} min"
+                    )
+                }
+                val post = report.postSwitchProductivity
+                val base = report.baselineProductivity
+                if (post != null && base != null) {
+                    KeyValueRow(
+                        label = "Focus after a jump",
+                        value = "${(post * 100).toInt()}% vs ${(base * 100).toInt()}% baseline"
+                    )
+                }
+            }
+
+            if (weeklyCounts.any { it > 0 }) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    "This week",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SwitchWeekBars(counts = weeklyCounts)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwitchWeekBars(counts: List<Int>) {
+    val labels = listOf("M", "T", "W", "T", "F", "S", "S")
+    val peak = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
+    val monday = remember { io.github.dailytrack.ui.components.weekStartFor(LocalDate.now()) }
+    val todayIndex = java.time.temporal.ChronoUnit.DAYS.between(
+        monday, LocalDate.now()
+    ).toInt().coerceIn(0, 6)
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        counts.take(7).forEachIndexed { i, count ->
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val fraction = if (count == 0) 0f else (count.toFloat() / peak).coerceAtLeast(0.15f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((10 + 34 * fraction).dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            when {
+                                count == 0 -> MaterialTheme.colorScheme.surfaceContainerHighest
+                                count >= 4 -> GradientStart
+                                else -> LearningBlue
+                            }
+                        )
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    labels.getOrElse(i) { "" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (i == todayIndex) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    fontWeight = if (i == todayIndex) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+    }
 }

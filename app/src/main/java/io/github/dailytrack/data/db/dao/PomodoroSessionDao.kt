@@ -59,10 +59,21 @@ interface PomodoroSessionDao {
     @Delete
     suspend fun delete(pomodoro: PomodoroSessionEntity)
 
-    @Query("UPDATE pomodoro_sessions SET endTime = :endTime, isCompleted = :isCompleted WHERE id = :id")
+    /**
+     * Closing a pomodoro always rewrites [PomodoroSessionEntity.durationMinutes]
+     * to the minutes actually spent, so stopping a 25 minute block after five
+     * minutes records five minutes - never the plan.
+     */
+    @Query(
+        "UPDATE pomodoro_sessions SET endTime = :endTime, isCompleted = :isCompleted, " +
+            "durationMinutes = MAX(1, CAST((:endTime - startTime) / 60000 AS INTEGER)) WHERE id = :id"
+    )
     suspend fun completePomodoro(id: Long, endTime: Long, isCompleted: Boolean = true)
 
-    @Query("UPDATE pomodoro_sessions SET endTime = :endTime, isCompleted = 1 WHERE isCompleted = 0")
+    @Query(
+        "UPDATE pomodoro_sessions SET endTime = :endTime, isCompleted = 1, " +
+            "durationMinutes = MAX(1, CAST((:endTime - startTime) / 60000 AS INTEGER)) WHERE isCompleted = 0"
+    )
     suspend fun completeActiveSession(endTime: Long = System.currentTimeMillis())
 
     @Query("SELECT SUM(durationMinutes) FROM pomodoro_sessions WHERE type = 'WORK' AND isCompleted = 1 AND startTime >= :start AND startTime < :end")

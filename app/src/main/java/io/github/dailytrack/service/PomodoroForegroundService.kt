@@ -374,6 +374,14 @@ class PomodoroForegroundService : Service() {
         PomodoroWidgetProvider.updateWidgets(this)
     }
 
+    /**
+     * Mirrors the running pomodoro into one session row.
+     *
+     * The pomodoro record itself is only the plan (how long it was meant to
+     * run). The session row is the single source of truth for *time*, so the
+     * ring, growth, loops and insights all read the same minutes and nothing
+     * is ever counted twice.
+     */
     private fun startTrackingSession(title: String, sessionStart: Long = System.currentTimeMillis()) {
         val db = (applicationContext as SoulTrackApp).database
         CoroutineScope(Dispatchers.IO).launch {
@@ -383,9 +391,28 @@ class PomodoroForegroundService : Service() {
             val catId = deepWorkCat ?: db.categoryDao().getIdByName("Productive")
             val catType = "PRODUCTIVE"
 
+            // A pomodoro started from a task stays attached to it; one
+            // started from a bare title still becomes a task of its own, so
+            // the work shows up under Tasks and counts toward the day ring.
+            val linkedTodoId = when {
+                todoId != null && todoId!! > 0L -> todoId
+                title.isNotBlank() && title != "Pomodoro Focus" -> {
+                    db.todoDao().insert(
+                        io.github.dailytrack.data.db.entity.TodoEntity(
+                            title = title,
+                            categoryId = catId,
+                            createdAt = sessionStart,
+                            updatedAt = sessionStart
+                        )
+                    )
+                }
+                else -> null
+            }
+
             val session = SessionEntity(
                 title = title.ifBlank { "Pomodoro Focus" },
                 categoryId = catId,
+                todoId = linkedTodoId,
                 type = catType,
                 startTime = sessionStart,
                 isActive = true,

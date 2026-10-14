@@ -44,10 +44,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.github.dailytrack.ui.Screen
+import io.github.dailytrack.ui.components.PrimaryCta
 import io.github.dailytrack.ui.components.ScreenList
 import io.github.dailytrack.ui.components.SectionTitle
 import io.github.dailytrack.ui.components.SurfaceCard
 import io.github.dailytrack.ui.navigateSingleTop
+import io.github.dailytrack.ui.settings.AppFeatures
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.platform.LocalContext
 
 private data class Destination(
     val label: String,
@@ -67,13 +71,13 @@ private val healthDestinations = listOf(
 private val mindDestinations = listOf(
     Destination("Focus mode", "Block distractions", Icons.Default.CenterFocusStrong, Screen.FocusMode.route, Color(0xFF10B981)),
     Destination("Journal", "Daily reflection", Icons.Default.EditNote, Screen.Journal.route, Color(0xFF60A5FA)),
-    Destination("Goals", "Targets by week", Icons.Default.Flag, Screen.Goals.route, Color(0xFFA78BFA)),
+    Destination("Targets", "Your goals and features", Icons.Default.Flag, Screen.Settings.route, Color(0xFFA78BFA)),
     Destination("Reminders", "Time and habit nudges", Icons.Default.Alarm, Screen.Reminders.route, Color(0xFFFBBF24))
 )
 
 private val progressDestinations = listOf(
     Destination("History", "Every session logged", Icons.Default.History, Screen.History.route, Color(0xFF94A3B8)),
-    Destination("Analytics", "Trends over time", Icons.Default.BarChart, Screen.Analytics.route, Color(0xFF2DD4BF)),
+    Destination("Home", "Today's ring and time", Icons.Default.Home, Screen.Dashboard.route, Color(0xFF2DD4BF)),
     Destination("Weekly report", "Your seven-day recap", Icons.Default.Assessment, Screen.WeeklyReport.route, Color(0xFF38BDF8)),
     Destination("Achievements", "Levels and unlocks", Icons.Default.EmojiEvents, Screen.Achievements.route, Color(0xFFFACC15))
 )
@@ -90,13 +94,43 @@ fun ExploreScreen(navController: NavController) {
         navController = navController,
         compact = true
     ) {
-        item {
-            SectionTitle(
-                title = "Health",
-                subtitle = "Body, movement and fuel"
-            )
+        if (AppFeatures.healthEnabled) {
+            item {
+                SectionTitle(
+                    title = "Health",
+                    subtitle = "Body, movement and fuel"
+                )
+            }
+            item { DestinationGrid(healthDestinations, navController) }
+        } else {
+            item {
+                val context = LocalContext.current
+                SurfaceCard(
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "Health layer is off",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Sleep, exercise, nutrition and the body dashboard are "
+                                + "optional. Turn them on whenever you want them.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        PrimaryCta(
+                            text = "Turn on health layer",
+                            icon = null,
+                            onClick = { AppFeatures.setHealthEnabled(true, context) }
+                        )
+                    }
+                }
+            }
         }
-        item { DestinationGrid(healthDestinations, navController) }
         item {
             SectionTitle(
                 title = "Mind & habits",

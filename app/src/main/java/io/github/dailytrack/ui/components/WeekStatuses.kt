@@ -86,9 +86,12 @@ fun daySnapshotFor(
     val plannedFocusSeconds = todos.filter { it.isAssignedOn(date, zone) }
         .sumOf { it.estimatedMinutes.coerceAtLeast(0) } * 60L
 
+    // Unrecorded elapsed time counts as distraction: an hour nobody wrote
+    // down is an hour that did not go to work.
+    val tracked = (coverage?.trackedSeconds ?: 0L) + (coverage?.awakeUntrackedSeconds ?: 0L)
     return DaySnapshot(
-        trackedSeconds = coverage?.trackedSeconds ?: 0L,
-        distractionSeconds = coverage?.wastedSeconds ?: 0L,
+        trackedSeconds = tracked,
+        distractionSeconds = coverage?.totalWastedSeconds ?: 0L,
         productiveSeconds = coverage?.totalProductiveSeconds ?: 0L,
         plannedFocusSeconds = plannedFocusSeconds,
         assignedTasks = assigned,

@@ -23,7 +23,8 @@ import kotlinx.coroutines.flow.Flow
 
 class InsightRepository(private val insightDao: InsightDao) {
     fun getAllInsights(): Flow<List<InsightEntity>> = insightDao.getAllInsights()
-    fun getActiveInsights(): Flow<List<InsightEntity>> = insightDao.getActiveInsights()
+    fun getActiveInsights(): Flow<List<InsightEntity>> =
+        insightDao.getActiveInsights(System.currentTimeMillis())
     fun getWarnings(): Flow<List<InsightEntity>> = insightDao.getWarnings()
     fun getInsightsByCategory(category: String): Flow<List<InsightEntity>> =
         insightDao.getInsightsByCategory(category)
@@ -36,13 +37,33 @@ class InsightRepository(private val insightDao: InsightDao) {
     suspend fun dismiss(id: Long) = insightDao.dismiss(id)
     suspend fun deleteDismissed() = insightDao.deleteDismissed()
 
+    /**
+     * Keeps one row per insight title and always stores the newest wording.
+     * Cooling down only suppresses a rewrite while the live card is still on
+     * screen - once it expires, today's version replaces it instead of
+     * leaving yesterday's copy frozen forever.
+     */
     suspend fun insertIfNotCoolingDown(insight: InsightEntity): Long {
         val now = System.currentTimeMillis()
-        val existing = insightDao.getActiveInsightByTitle(insight.title, now)
-        return if (existing == null) {
+        val live = insightDao.getActiveInsightByTitle(insight.title, now)
+        if (live != null) return live.id
+        val sameTitle = insightDao.getUndismissedByTitle(insight.title)
+        return if (sameTitle == null) {
             insightDao.insert(insight)
         } else {
-            existing.id
+            insightDao.update(
+                sameTitle.copy(
+                    severity = insight.severity,
+                    category = insight.category,
+                    message = insight.message,
+                    dataEvidence = insight.dataEvidence,
+                    actionLabel = insight.actionLabel,
+                    timestamp = insight.timestamp,
+                    createdAt = insight.createdAt,
+                    cooldownUntil = insight.cooldownUntil
+                )
+            )
+            sameTitle.id
         }
     }
 }

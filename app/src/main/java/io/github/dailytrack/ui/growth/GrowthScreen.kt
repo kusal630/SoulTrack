@@ -37,6 +37,8 @@ import io.github.dailytrack.engine.GrowthScoreResult
 import io.github.dailytrack.ui.Screen
 import io.github.dailytrack.ui.components.*
 import io.github.dailytrack.ui.navigateSingleTop
+import io.github.dailytrack.ui.settings.AppFeatures
+import io.github.dailytrack.ui.settings.ProductTargets
 import io.github.dailytrack.ui.theme.Dimens
 import io.github.dailytrack.ui.theme.ExerciseColor
 import io.github.dailytrack.ui.theme.LearningColor
@@ -65,6 +67,7 @@ fun GrowthScreen(
     val growthResult by viewModel.growthResult.collectAsState()
     val loopStatus by viewModel.loopStatus.collectAsState()
     val todayCoverage by viewModel.todayCoverage.collectAsState()
+    val noveltyToday by viewModel.noveltyToday.collectAsState()
 
     ScreenList(
         title = "Growth & Routine",
@@ -76,7 +79,11 @@ fun GrowthScreen(
         }
 
         item {
-            GrowthComponentsCard(result = growthResult, coverage = todayCoverage)
+            GrowthComponentsCard(
+                result = growthResult,
+                coverage = todayCoverage,
+                novelty = noveltyToday
+            )
         }
 
         item {
@@ -101,9 +108,9 @@ fun GrowthScreen(
 
         item {
             PrimaryCta(
-                text = "Set goals & targets",
+                text = "Your targets",
                 icon = Icons.Default.TrackChanges,
-                onClick = { navController.navigateSingleTop(Screen.Goals.route) }
+                onClick = { navController.navigateSingleTop(Screen.Settings.route) }
             )
         }
 
@@ -129,10 +136,10 @@ private fun GrowthDestinationGrid(navController: NavController) {
             LearningColor
         ),
         GrowthDestination(
-            "Analytics",
+            "Weekly report",
             "Trends across weeks",
-            Icons.Default.BarChart,
-            Screen.Analytics.route,
+            Icons.Default.Assessment,
+            Screen.WeeklyReport.route,
             RecoveryColor
         ),
         GrowthDestination(
@@ -252,13 +259,42 @@ fun GrowthScoreDetailCard(score: Double, result: GrowthScoreResult?) {
             )
             Spacer(modifier = Modifier.height(4.dp))
 
-            ScoreGuideRow("25%", "Learning", "Target: 2h/day", LearningColor)
-            ScoreGuideRow("25%", "Productive Work", "Target: 4h/day", ProductiveColor)
-            ScoreGuideRow("20%", "Exercise", "Target: 1h/day", ExerciseColor)
-            ScoreGuideRow("15%", "Sleep", "Target: 7-9h", SleepColor)
-            ScoreGuideRow("5%", "Social", "Target: 30min/day", SocialColor)
-            ScoreGuideRow("5%", "Novelty", "Trying new things", RecoveryColor)
-            ScoreGuideRow("5%", "Consistency", "Active streak (7 days)", NeutralColor)
+            val weights = io.github.dailytrack.engine.GrowthEngine
+                .weightsFor(AppFeatures.healthEnabled)
+            fun pct(value: Double) = "${(value * 100).toInt()}%"
+
+            ScoreGuideRow(
+                pct(weights.learning), "Learning",
+                growthTargetLabel(ProductTargets.learningMinutes) { "${it / 60}h target" },
+                LearningColor
+            )
+            ScoreGuideRow(
+                pct(weights.productive), "Productive Work",
+                growthTargetLabel(ProductTargets.productiveMinutes) { "${it / 60}h target" },
+                ProductiveColor
+            )
+            ScoreGuideRow(
+                pct(weights.exercise), "Exercise",
+                if (AppFeatures.healthEnabled) {
+                    growthTargetLabel(ProductTargets.exerciseMinutes) { "${it / 60}h target" }
+                } else {
+                    "not tracked"
+                },
+                ExerciseColor
+            )
+            ScoreGuideRow(
+                pct(weights.sleep), "Sleep",
+                if (AppFeatures.healthEnabled) {
+                    ProductTargets.sleepHours.takeIf { it > 0f }
+                        ?.let { "${it.toInt()}-${(it + 1).toInt()}h target" } ?: "your own rhythm"
+                } else {
+                    "not tracked"
+                },
+                SleepColor
+            )
+            ScoreGuideRow(pct(weights.social), "Social", "your own average", SocialColor)
+            ScoreGuideRow(pct(weights.novelty), "Novelty", "Trying new things", RecoveryColor)
+            ScoreGuideRow(pct(weights.consistency), "Consistency", "Active streak (7 days)", NeutralColor)
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -326,7 +362,11 @@ fun ScoreGuideRow(percentage: String, label: String, target: String, color: Colo
 }
 
 @Composable
-fun GrowthComponentsCard(result: GrowthScoreResult?, coverage: io.github.dailytrack.engine.TimeCoverage?) {
+fun GrowthComponentsCard(
+    result: GrowthScoreResult?,
+    coverage: io.github.dailytrack.engine.TimeCoverage?,
+    novelty: Double = 0.0
+) {
     SurfaceCard {
         Column {
             Text(
@@ -338,41 +378,50 @@ fun GrowthComponentsCard(result: GrowthScoreResult?, coverage: io.github.dailytr
             GrowthComponentRow(
                 "Learning",
                 formatMinutes(coverage?.learningSeconds ?: 0),
-                "2h target",
+                growthTargetLabel(ProductTargets.learningMinutes) { "${it / 60}h target" },
                 result?.learningComponent ?: 0.0,
                 LearningColor
             )
             GrowthComponentRow(
                 "Productive",
                 formatMinutes(coverage?.productiveSeconds ?: 0),
-                "4h target",
+                growthTargetLabel(ProductTargets.productiveMinutes) { "${it / 60}h target" },
                 result?.productiveComponent ?: 0.0,
                 ProductiveColor
             )
             GrowthComponentRow(
                 "Exercise",
                 formatMinutes(coverage?.exerciseSeconds ?: 0),
-                "1h target",
+                if (AppFeatures.healthEnabled) {
+                    growthTargetLabel(ProductTargets.exerciseMinutes) { "${it / 60}h target" }
+                } else {
+                    "off"
+                },
                 result?.exerciseComponent ?: 0.0,
                 ExerciseColor
             )
             GrowthComponentRow(
                 "Sleep",
                 formatHoursMinutes(coverage?.sleepSeconds ?: 0),
-                "7-9h target",
+                if (AppFeatures.healthEnabled) {
+                    ProductTargets.sleepHours.takeIf { it > 0f }
+                        ?.let { "${it.toInt()}-${(it + 1).toInt()}h target" } ?: "your own rhythm"
+                } else {
+                    "off"
+                },
                 result?.sleepComponent ?: 0.0,
                 SleepColor
             )
             GrowthComponentRow(
                 "Social",
                 formatMinutes(coverage?.socialSeconds ?: 0),
-                "30m target",
+                "your own average",
                 result?.socialComponent ?: 0.0,
                 SocialColor
             )
             GrowthComponentRow(
                 "Novelty",
-                "--",
+                "${(novelty * 100).toInt()}%",
                 "Variety",
                 result?.noveltyComponent ?: 0.0,
                 RecoveryColor
@@ -387,6 +436,10 @@ fun GrowthComponentsCard(result: GrowthScoreResult?, coverage: io.github.dailytr
         }
     }
 }
+
+/** The user's own target, or an honest "we calibrate this for you". */
+private fun growthTargetLabel(targetMinutes: Int, format: (Int) -> String): String =
+    if (targetMinutes > 0) format(targetMinutes) else "your own average"
 
 @Composable
 fun GrowthComponentRow(label: String, value: String, target: String, score: Double, color: Color, totalScore: Double = 100.0) {

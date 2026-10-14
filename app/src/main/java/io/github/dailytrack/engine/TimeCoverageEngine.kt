@@ -34,7 +34,9 @@ data class TimeCoverage(
     val sleepSeconds: Long,
     val socialSeconds: Long,
     val recoverySeconds: Long,
-    val totalDaySeconds: Long
+    val totalDaySeconds: Long,
+    /** Seconds from day start to now (clamped to the day end) - the part of the day that actually happened. */
+    val elapsedSeconds: Long = totalDaySeconds
 ) {
     val trackedRatio: Double
         get() = if (totalDaySeconds > 0) (trackedSeconds.toDouble() / totalDaySeconds).coerceIn(0.0, 1.0) else 0.0
@@ -48,11 +50,22 @@ data class TimeCoverage(
     val totalProductiveSeconds: Long
         get() = productiveSeconds + learningSeconds
 
+    /**
+     * Waste the day is accountable for: explicitly tracked distraction plus
+     * every elapsed minute nobody recorded. Unrecorded time is never free -
+     * if it is not written down it did not go to work.
+     */
     val totalWastedSeconds: Long
-        get() = wastedSeconds
+        get() = wastedSeconds + awakeUntrackedSeconds
 
+    /** Elapsed time nobody accounted for (sleep counts until it is tracked). */
     val awakeUntrackedSeconds: Long
         get() = untrackedSeconds.coerceAtLeast(0)
+
+    /** Share of the elapsed day that is accounted waste, 0f..1f. */
+    val wasteRatio: Double
+        get() = if (elapsedSeconds <= 0) 0.0
+        else (totalWastedSeconds.toDouble() / elapsedSeconds).coerceIn(0.0, 1.0)
 }
 
 class TimeCoverageEngine {
@@ -67,6 +80,7 @@ class TimeCoverageEngine {
         val dayStart = date.atStartOfDay(zone).plusHours(dayStartHour.toLong()).toInstant().toEpochMilli()
         val dayEnd = date.plusDays(1).atStartOfDay(zone).plusHours(dayStartHour.toLong()).toInstant().toEpochMilli()
         val totalDaySeconds = (dayEnd - dayStart) / 1000
+        val elapsedSeconds = ((minOf(now, dayEnd) - dayStart) / 1000).coerceIn(0L, totalDaySeconds)
 
         val intervals = mutableListOf<Triple<Long, Long, String>>()
 
@@ -136,7 +150,9 @@ class TimeCoverageEngine {
         }
         flush()
 
-        val untrackedSeconds = (totalDaySeconds - trackedSeconds).coerceAtLeast(0)
+        // Only the part of the day that already happened can be untracked.
+        // The rest of tonight is not "missing", it just has not arrived yet.
+        val untrackedSeconds = (elapsedSeconds - trackedSeconds).coerceAtLeast(0)
 
         return TimeCoverage(
             date = date,
@@ -150,7 +166,8 @@ class TimeCoverageEngine {
             sleepSeconds = sleepSeconds,
             socialSeconds = socialSeconds,
             recoverySeconds = recoverySeconds,
-            totalDaySeconds = totalDaySeconds
+            totalDaySeconds = totalDaySeconds,
+            elapsedSeconds = elapsedSeconds
         )
     }
 }

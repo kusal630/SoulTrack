@@ -54,10 +54,8 @@ import io.github.dailytrack.ui.nutrition.NutritionScreen
 import io.github.dailytrack.ui.body.BodySystemsScreen
 import io.github.dailytrack.ui.focus.FocusModeScreen
 import io.github.dailytrack.ui.journal.JournalScreen
-import io.github.dailytrack.ui.goals.GoalsScreen
 import io.github.dailytrack.ui.reminders.RemindersScreen
 import io.github.dailytrack.ui.history.HistoryScreen
-import io.github.dailytrack.ui.analytics.AnalyticsScreen
 import io.github.dailytrack.ui.insights.WeeklyReportScreen
 import io.github.dailytrack.ui.gamification.GamificationScreen
 import io.github.dailytrack.ui.components.Hairline
@@ -85,10 +83,8 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object BodySystems : Screen("body_systems", "Body", Icons.Default.Favorite)
     data object FocusMode : Screen("focus_mode", "Focus", Icons.Default.CenterFocusStrong)
     data object Journal : Screen("journal", "Journal", Icons.Default.EditNote)
-    data object Goals : Screen("goals", "Goals", Icons.Default.TrackChanges)
     data object Reminders : Screen("reminders", "Reminders", Icons.Default.Alarm)
     data object History : Screen("history", "History", Icons.Default.History)
-    data object Analytics : Screen("analytics", "Analytics", Icons.Default.BarChart)
     data object WeeklyReport : Screen("weekly_report", "Report", Icons.Default.Assessment)
     data object Achievements : Screen("achievements", "Achievements", Icons.Default.EmojiEvents)
 }
@@ -124,6 +120,27 @@ fun DailyTrackNavHost() {
 
     BackHandler(enabled = currentRoute != Screen.Dashboard.route) {
         navController.navigateToHome()
+    }
+
+    // The home button is a promise: leave the app, come back, and you land on
+    // Home - not on whichever deep screen happened to be open.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var wasStopped by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> wasStopped = true
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    if (wasStopped) {
+                        wasStopped = false
+                        navController.navigateToHome()
+                    }
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(
@@ -205,7 +222,6 @@ fun DailyTrackNavHost() {
             composable(Screen.BodySystems.route) { BodySystemsScreen(navController) }
             composable(Screen.Journal.route) { JournalScreen(navController) }
             composable(Screen.History.route) { HistoryScreen(navController) }
-            composable(Screen.Analytics.route) { AnalyticsScreen(navController) }
             composable(Screen.FocusMode.route) {
                 var focusActive by rememberSaveable { mutableStateOf(false) }
                 var focusSound by rememberSaveable { mutableStateOf("") }
@@ -214,16 +230,6 @@ fun DailyTrackNavHost() {
                     selectedSound = focusSound.ifEmpty { null },
                     onToggleFocus = { focusActive = !focusActive },
                     onSelectSound = { focusSound = it }
-                )
-            }
-            composable(Screen.Goals.route) {
-                val viewModel: MainViewModel = viewModel()
-                val goals by viewModel.goals.collectAsState()
-                GoalsScreen(
-                    goals = goals,
-                    onAddGoal = viewModel::addGoal,
-                    onUpdateProgress = viewModel::updateGoalProgress,
-                    onDeleteGoal = viewModel::deleteGoal
                 )
             }
             composable(Screen.Reminders.route) {

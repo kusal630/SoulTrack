@@ -19,11 +19,44 @@ class TimeCoverageEngineTest {
     fun `empty sessions returns zero coverage`() {
         val date = java.time.LocalDate.of(2024, 1, 15)
         val zone = java.time.ZoneId.of("UTC")
-        val result = engine.calculateCoverage(emptyList(), emptyCategories, date, zone)
+        // Clock pinned to noon so the assertions do not depend on wall time.
+        val now = date.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val result = engine.calculateCoverage(emptyList(), emptyCategories, date, zone, now = now)
 
         assertEquals(0L, result.trackedSeconds)
-        assertEquals(result.totalDaySeconds, result.untrackedSeconds)
+        // Only the twelve hours that already happened can be untracked.
+        assertEquals(12 * 3600L, result.untrackedSeconds)
+        assertEquals(12 * 3600L, result.elapsedSeconds)
+        assertEquals(24 * 3600L, result.totalDaySeconds)
         assertEquals(0.0, result.trackedRatio, 0.001)
+    }
+
+    @Test
+    fun `unrecorded time counts as waste, future time does not`() {
+        val date = java.time.LocalDate.of(2024, 1, 15)
+        val zone = java.time.ZoneId.of("UTC")
+        val dayStart = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        // Clock is 4 hours into the day; one hour of it was recorded.
+        val now = dayStart + 4 * 3600_000L
+
+        val session = SessionEntity(
+            id = 1,
+            type = "PRODUCTIVE",
+            categoryId = null,
+            startTime = dayStart + 3600_000,
+            endTime = dayStart + 7200_000,
+            isActive = false
+        )
+
+        val result = engine.calculateCoverage(listOf(session), emptyCategories, date, zone, now = now)
+
+        assertEquals(4 * 3600L, result.elapsedSeconds)
+        assertEquals(3600L, result.trackedSeconds)
+        // Three hours of the day already happened and were never written down.
+        assertEquals(3 * 3600L, result.untrackedSeconds)
+        // Nothing tracked as distraction, so all of it is unrecorded waste.
+        assertEquals(3 * 3600L, result.totalWastedSeconds)
+        assertEquals(0.75, result.wasteRatio, 0.001)
     }
 
     @Test

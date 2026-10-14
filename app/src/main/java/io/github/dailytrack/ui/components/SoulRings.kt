@@ -23,9 +23,16 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,6 +62,7 @@ import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.ui.theme.Aqua
 import io.github.dailytrack.ui.theme.DayStatusPalette
 import io.github.dailytrack.ui.theme.LocalDayStatusColors
+import io.github.dailytrack.ui.theme.Motion
 import io.github.dailytrack.ui.theme.Mint
 import io.github.dailytrack.ui.theme.Sky
 
@@ -146,15 +154,14 @@ fun SoulRings(
     val shouldAnimate = animate && !reduceMotion
     val context = LocalContext.current
 
+    // A tween keeps the arc gliding to its new value instead of bouncing past
+    // it - a day ring should feel like a dial, not a spring.
     val animatedProgress by animateFloatAsState(
         targetValue = dayProgress.coerceIn(0f, 1f),
         animationSpec = if (shouldAnimate) {
-            spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            )
+            tween(durationMillis = Motion.Slow, easing = FastOutSlowInEasing)
         } else {
-            spring(dampingRatio = 1f, stiffness = Spring.StiffnessHigh)
+            tween(durationMillis = 0)
         },
         label = "soul_rings_progress"
     )
@@ -196,6 +203,53 @@ fun SoulRings(
             statusColors = statusColors,
             showNeedle = showNeedle,
             glow = false
+        )
+        // The mark keeps breathing: a slow sheen travels the inner arc so the
+        // logo is never a dead sticker, and it parks itself when the user asks
+        // the system to reduce motion.
+        if (shouldAnimate && animatedProgress > 0f) {
+            RingSheen(progress = animatedProgress, modifier = Modifier.fillMaxSize())
+        }
+    }
+}
+
+/** Slow travelling highlight along the inner arc. */
+@Composable
+private fun RingSheen(progress: Float, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "ring_sheen")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 5200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ring_sheen_rotation"
+    )
+
+    Canvas(modifier = modifier) {
+        val unit = size.minDimension / SoulRingsSpec.GRID
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val radius = SoulRingsSpec.INNER_RADIUS * unit
+        val sweep = 55f
+        val start = -90f + rotation + (progress * 360f * 0.7f)
+
+        drawArc(
+            brush = Brush.sweepGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    Color.White.copy(alpha = 0.28f),
+                    Color.Transparent
+                )
+            ),
+            startAngle = start,
+            sweepAngle = sweep,
+            useCenter = false,
+            style = Stroke(width = SoulRingsSpec.INNER_STROKE * unit, cap = StrokeCap.Round),
+            topLeft = Offset(cx - radius, cy - radius),
+            size = Size(radius * 2f, radius * 2f),
+            alpha = 0.9f
         )
     }
 }

@@ -120,6 +120,30 @@ fun classifyDay(
 }
 
 /**
+ * How much of today's focus goal has been *recorded*, 0f..1f.
+ *
+ * The ring has to answer "did this day go to work?", and the only honest
+ * measure of that is time the user actually wrote down. A goal of 0 means no
+ * target is known yet (nothing set, no history), so the focus part simply
+ * stays silent rather than inventing a number.
+ */
+fun focusProgress(focusedSeconds: Long, goalSeconds: Long): Float {
+    if (goalSeconds <= 0L) return 0f
+    return (focusedSeconds.toFloat() / goalSeconds).coerceIn(0f, 1f)
+}
+
+/**
+ * The day ring: finished tasks and recorded focus time both earn progress.
+ *
+ * Tasks cover the planned side of the day; every timer, pomodoro and backfilled
+ * work block covers the recorded side. The ring fills with whichever is
+ * further along, so work that was tracked but never written as a task still
+ * moves it - and a task-heavy day still fills it without a single timer.
+ */
+fun recordedDayProgress(taskProgress: Float, focusProgress: Float): Float =
+    maxOf(taskProgress.coerceIn(0f, 1f), focusProgress.coerceIn(0f, 1f))
+
+/**
  * Day progress = completed / assigned, clamped to 0f..1f.
  *
  * Adding the very first task makes this move immediately (1 assigned, 0 done

@@ -37,6 +37,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,19 +57,17 @@ import io.github.dailytrack.ui.theme.ExerciseColor
 import io.github.dailytrack.ui.theme.NeutralColor
 import io.github.dailytrack.ui.theme.ProductiveColor
 import io.github.dailytrack.ui.theme.WastedColor
+import io.github.dailytrack.ui.viewmodel.MainViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.dailytrack.ui.components.EmptyState
 
 @Composable
-fun BodySystemsScreen(navController: NavController) {
-    val sampleCards = listOf(
-        BodySystemCard("Sleep & Recovery", "Unknown", listOf("Insufficient data"), "→", "Sleep debt may reduce focus, mood, and physical recovery.", "Aim for consistent sleep and rest when needed."),
-        BodySystemCard("Energy & Metabolism", "Unknown", listOf("Insufficient data"), "→", "Low energy intake and high sugar may affect energy levels.", "Consider balanced meals."),
-        BodySystemCard("Cardiovascular & Fitness", "Unknown", listOf("Insufficient data"), "→", "Regular movement supports cardiovascular health.", "Aim for regular moderate movement."),
-        BodySystemCard("Musculoskeletal & Movement", "Unknown", listOf("Insufficient data"), "→", "Regular movement supports musculoskeletal health.", "Gentle stretching or walking may help."),
-        BodySystemCard("Digestive & Hydration", "Unknown", listOf("Insufficient data"), "→", "Adequate fiber and water support digestive health.", "Consider vegetables, fruits, whole grains, and fluids."),
-        BodySystemCard("Nutrition & Micronutrients", "Unknown", listOf("Insufficient data"), "→", "Long-term low intake of key micronutrients may affect health.", "Review your diet or consult a professional."),
-        BodySystemCard("Mood & Stress", "Unknown", listOf("Insufficient data"), "→", "Persistent low mood or high stress may benefit from attention.", "Consider reflection or professional support."),
-        BodySystemCard("Cognitive Focus", "Unknown", listOf("Insufficient data"), "→", "Sleep, focus, and learning activity influence cognitive performance.", "Prioritize sleep and focused learning blocks.")
-    )
+fun BodySystemsScreen(
+    navController: NavController,
+    viewModel: MainViewModel = viewModel()
+) {
+    // Built from the user's own sleep, food, movement and mood records.
+    val cards by viewModel.bodyCards.collectAsState()
 
     ScreenList(
         title = "Body systems",
@@ -111,8 +111,19 @@ fun BodySystemsScreen(navController: NavController) {
             )
         }
 
-        items(sampleCards.size) { index ->
-            BodySystemCardView(sampleCards[index])
+        if (cards.isEmpty()) {
+            item {
+                EmptyState(
+                    title = "Nothing to read yet",
+                    message = "Log sleep, food, movement or a mood check-in for a week and this screen builds your indicators from it.",
+                    icon = Icons.Default.HealthAndSafety,
+                    tint = NeutralColor
+                )
+            }
+        } else {
+            items(cards.size) { index ->
+                BodySystemCardView(cards[index])
+            }
         }
     }
 }

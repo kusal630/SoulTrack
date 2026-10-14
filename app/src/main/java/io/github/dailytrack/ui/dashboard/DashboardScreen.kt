@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.AddTask
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Explore
@@ -75,8 +76,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SessionEntity
 import io.github.dailytrack.data.db.entity.TodoEntity
+import androidx.compose.foundation.BorderStroke
 import io.github.dailytrack.engine.DayStatus
+import io.github.dailytrack.engine.SwitchReport
 import io.github.dailytrack.engine.dayProgress
+import io.github.dailytrack.engine.focusProgress
+import io.github.dailytrack.engine.recordedDayProgress
 import io.github.dailytrack.engine.todayProgressLabel
 import io.github.dailytrack.engine.weekStatusLabel
 import io.github.dailytrack.service.FocusSettings
@@ -140,6 +145,9 @@ fun DashboardScreen(
     val completedTodos by viewModel.completedTodos.collectAsState()
     val weeklyReport by viewModel.weeklyReport.collectAsState()
     val activeInsights by viewModel.activeInsights.collectAsState()
+    val switchReport by viewModel.switchReport.collectAsState()
+    val wellbeing by viewModel.wellbeing.collectAsState()
+    val switchEvents by viewModel.switchEventsToday.collectAsState()
 
     val context = LocalContext.current
     val noiseSensingEnabled = remember {
@@ -150,8 +158,19 @@ fun DashboardScreen(
     val zone = remember { ZoneId.systemDefault() }
     val allTodos = remember(activeTodos, completedTodos) { activeTodos + completedTodos }
 
-    val dayProgressValue = remember(activeTodos, completedTodos, today) {
+    val focusGoalSeconds by viewModel.focusGoalSeconds.collectAsState()
+
+    // The ring is one number for one day: finished tasks and recorded focus
+    // time both earn it. Nothing moves the ring that was not written down.
+    val taskProgressValue = remember(activeTodos, completedTodos, today) {
         dayProgressFor(today, allTodos, zone)
+    }
+    val todayFocusedSeconds = todayCoverage?.totalProductiveSeconds ?: 0L
+    val focusProgressValue = remember(todayFocusedSeconds, focusGoalSeconds) {
+        focusProgress(todayFocusedSeconds, focusGoalSeconds)
+    }
+    val dayProgressValue = remember(taskProgressValue, focusProgressValue) {
+        recordedDayProgress(taskProgressValue, focusProgressValue)
     }
     val weekStatuses = remember(weeklyReport, allTodos, today) {
         weekStatusesFor(today, weeklyReport, allTodos, zone)
@@ -178,8 +197,8 @@ fun DashboardScreen(
 
     val completedSessions = todaySessions.filter { !it.isActive }
     val todayStatus = when {
-        assignedCount == 0 -> DayStatus.NO_TASKS
         dayProgressValue >= 1f -> DayStatus.DONE
+        assignedCount == 0 && todayFocusedSeconds <= 0L -> DayStatus.NO_TASKS
         else -> DayStatus.IN_PROGRESS
     }
     val statusColors = LocalDayStatusColors.current
@@ -206,6 +225,7 @@ fun DashboardScreen(
                 todayIndex = today.dayOfWeek.value - 1,
                 completed = completedCount,
                 assigned = assignedCount,
+                focusedMinutes = (todayFocusedSeconds / 60).toInt(),
                 status = todayStatus,
                 statusTint = statusColors.colorFor(
                     if (todayStatus == DayStatus.IN_PROGRESS) null else todayStatus
@@ -220,6 +240,17 @@ fun DashboardScreen(
                 categoryName = activeSession?.categoryId?.let { categories[it]?.name } ?: "",
                 onStop = { viewModel.stopSession() }
             )
+        }
+
+        val lastAbandoned = switchEvents.lastOrNull { it.fromTodoId != null }?.fromTodoId
+        if (switchReport.switchCount >= 3 && lastAbandoned != null) {
+            item {
+                JumpAttentionCard(
+                    report = switchReport,
+                    taskTitle = allTodos.firstOrNull { it.id == lastAbandoned }?.title,
+                    onResume = { viewModel.startTodo(lastAbandoned) }
+                )
+            }
         }
 
         if (activeSession == null) {
@@ -312,6 +343,10 @@ fun DashboardScreen(
             }
         }
 
+        if (wellbeing != null) {
+            item { DirectionCard(summary = wellbeing!!) }
+        }
+
         if (todayCoverage != null &&
             (todayCoverage!!.trackedSeconds + todayCoverage!!.untrackedSeconds) > 0
         ) {
@@ -328,7 +363,7 @@ fun DashboardScreen(
                         PieChartData("Social", todayCoverage!!.socialSeconds.toFloat(), SocialColor),
                         PieChartData("Recovery", todayCoverage!!.recoverySeconds.toFloat(), RecoveryColor),
                         PieChartData("Wasted", todayCoverage!!.wastedSeconds.toFloat(), WastedColor),
-                        PieChartData("Untracked", todayCoverage!!.untrackedSeconds.toFloat(), NeutralColor)
+                        PieChartData("Untracked (waste)", todayCoverage!!.untrackedSeconds.toFloat(), NeutralColor)
                     ).filter { it.value > 0f }
                 )
             }
@@ -392,6 +427,7 @@ private fun TodayHero(
     todayIndex: Int,
     completed: Int,
     assigned: Int,
+    focusedMinutes: Int,
     status: DayStatus,
     statusTint: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier
@@ -416,7 +452,12 @@ private fun TodayHero(
             Spacer(modifier = Modifier.height(Dimens.CardGap))
 
             Text(
-                text = if (assigned == 0) "No tasks assigned" else "$completed of $assigned done",
+                text = when {
+                    assigned > 0 && focusedMinutes > 0 -> "$completed of $assigned done · ${focusedMinutes}m focus"
+                    assigned > 0 -> "$completed of $assigned done"
+                    focusedMinutes > 0 -> "${focusedMinutes}m focus recorded"
+                    else -> "Nothing recorded yet"
+                },
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -424,8 +465,8 @@ private fun TodayHero(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = when (status) {
-                    DayStatus.NO_TASKS -> "The inner ring fills as you finish tasks"
-                    DayStatus.DONE -> "Day closed at 12 - the week ring just recorded it"
+                    DayStatus.NO_TASKS -> "The inner ring fills from tasks you finish and time you track"
+                    DayStatus.DONE -> "Day closed - the week ring just recorded it"
                     else -> "The week ring records today when the day ends"
                 },
                 style = MaterialTheme.typography.bodySmall,
@@ -484,6 +525,84 @@ private fun StatusLegendRow(tint: androidx.compose.ui.graphics.Color, status: Da
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
+    }
+}
+
+/**
+ * Where the day is actually heading, from the phone's own usage.
+ *
+ * Everything here is measured on-device: the hours Soul Track never saw are
+ * still counted, and unrecorded time is treated as waste rather than as
+ * free time. One number, one sentence, one thing to change.
+ */
+@Composable
+private fun DirectionCard(summary: io.github.dailytrack.wellbeing.WellbeingSummary) {
+    val share = summary.productiveShare
+    val verdict = when {
+        summary.trackedMillis <= 0L -> "Nothing measured yet"
+        share >= 0.6f -> "You are heading in the right direction"
+        share >= 0.35f -> "Half your measured time is going to work"
+        else -> "Most measured time is going elsewhere"
+    }
+    val next = when {
+        summary.untrackedShare >= 0.4f ->
+            "A large slice of today was never recorded. Start the timer before the next block."
+        share < 0.35f && summary.wastedMillis > summary.productiveMillis ->
+            "Waste is outrunning focus. Pick one block and give it a name."
+        share >= 0.6f && summary.wastedMillis > 0 ->
+            "Focus is winning. Protect it by closing the smallest time leak next."
+        else -> "Keep recording - the ring only knows what you write down."
+    }
+
+    SurfaceCard(contentPadding = PaddingValues(Dimens.CardPadding)) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Explore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Direction",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = verdict,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { share },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(CircleShape),
+                color = if (share >= 0.5f) ProductiveColor else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "%.0f%% focus · %.0f%% waste · %.0f%% unrecorded".format(
+                    share * 100,
+                    (summary.wastedMillis.toFloat() / summary.totalMillis.coerceAtLeast(1L)) * 100,
+                    summary.untrackedShare * 100
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = next,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 
@@ -805,3 +924,62 @@ fun formatDurationHMS(seconds: Long): String {
     }
 }
 
+
+/**
+ * Shows up once today's work has jumped context three or more times: the
+ * abandoned task is named and put one tap away, so the drift is visible on
+ * the very screen where it is happening.
+ */
+@Composable
+private fun JumpAttentionCard(
+    report: SwitchReport,
+    taskTitle: String?,
+    onResume: () -> Unit
+) {
+    SurfaceCard(
+        containerColor = WastedColor.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, WastedColor.copy(alpha = 0.35f)),
+        contentPadding = PaddingValues(Dimens.CardPadding)
+    ) {
+        Column {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = WastedColor,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    "Your focus keeps switching",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            val abandonedLine = if (report.abandonedTaskCount > 0) {
+                "${report.abandonedTaskCount} unfinished"
+            } else {
+                "several open threads"
+            }
+            Text(
+                "Context changed ${report.switchCount} times today and $abandonedLine. "
+                    + "Pick the task you walked away from and close it first.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (taskTitle != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                GhostCta(
+                    text = "Back to \"$taskTitle\"",
+                    onClick = onResume
+                )
+            }
+        }
+    }
+}

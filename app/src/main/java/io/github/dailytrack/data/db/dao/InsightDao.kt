@@ -26,8 +26,16 @@ interface InsightDao {
     @Query("SELECT * FROM insights ORDER BY createdAt DESC")
     fun getAllInsights(): Flow<List<InsightEntity>>
 
-    @Query("SELECT * FROM insights WHERE dismissed = 0 ORDER BY createdAt DESC")
-    fun getActiveInsights(): Flow<List<InsightEntity>>
+    /**
+     * Live, non-dismissed insights that have not cooled down yet. The cooldown
+     * doubles as the expiry, so a card can never sit on the dashboard with
+     * copy written for a day that is long gone.
+     */
+    @Query("SELECT * FROM insights WHERE dismissed = 0 AND cooldownUntil > :now ORDER BY createdAt DESC")
+    fun getActiveInsights(now: Long = System.currentTimeMillis()): Flow<List<InsightEntity>>
+
+    @Query("SELECT * FROM insights WHERE title = :title AND dismissed = 0 LIMIT 1")
+    suspend fun getUndismissedByTitle(title: String): InsightEntity?
 
     @Query("SELECT * FROM insights WHERE dismissed = 0 AND severity IN ('WARNING', 'CRITICAL') ORDER BY createdAt DESC")
     fun getWarnings(): Flow<List<InsightEntity>>

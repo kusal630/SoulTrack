@@ -49,11 +49,14 @@ data class Focusability(
 
 class FocusabilityEngine {
 
-    fun evaluate(ctx: FocusContext): Focusability {
+    fun evaluate(
+        ctx: FocusContext,
+        behavior: BehaviorProfile = BehaviorProfile.coldStart()
+    ): Focusability {
         var score = 60.0
         val reasons = mutableListOf<String>()
 
-        val (timeScore, timeReason) = timeOfDayScore(ctx.hourOfDay)
+        val (timeScore, timeReason) = timeOfDayScore(ctx.hourOfDay, behavior)
         score += timeScore
         if (timeReason != null) reasons.add(timeReason)
 
@@ -108,7 +111,26 @@ class FocusabilityEngine {
      * Circadian curve: strong late morning and early evening, weak in the
      * small hours and after lunch. Works with zero personal history.
      */
-    private fun timeOfDayScore(hour: Int): Pair<Double, String?> = when (hour) {
+    /**
+     * The generic circadian curve, re-weighted once the user has their own
+     * history: how often they actually did productive work at this hour wins
+     * over the population curve, and they only get a reason they recognise.
+     */
+    private fun timeOfDayScore(
+        hour: Int,
+        behavior: BehaviorProfile = BehaviorProfile.coldStart()
+    ): Pair<Double, String?> {
+        val generic = genericTimeOfDayScore(hour)
+        if (!behavior.hasData()) return generic
+
+        val affinity = listOf("PRODUCTIVE", "LEARNING", "ACTIVITY")
+            .maxOf { behavior.hourAffinity(hour, it) }
+        val personal = (affinity - 0.5) * 70.0
+        val blended = generic.first * 0.4 + personal * 0.6
+        return blended to (behavior.describe(hour, "PRODUCTIVE") ?: generic.second)
+    }
+
+    private fun genericTimeOfDayScore(hour: Int): Pair<Double, String?> = when (hour) {
         in 5..6 -> -10.0 to "very early hours"
         in 7..8 -> 5.0 to "warming up for the day"
         in 9..11 -> 18.0 to "peak morning focus"
