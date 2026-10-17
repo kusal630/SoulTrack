@@ -36,7 +36,13 @@ data class FocusContext(
     /** Self reported mood 1-5. */
     val mood: Int? = null,
     /** Self reported energy 1-5. */
-    val energy: Int? = null
+    val energy: Int? = null,
+    /**
+     * Hours slept in the last 24h, from the user's own sleep records. Sleep
+     * restriction reliably impairs sustained attention
+     * (Lowe et al., 2017, g = -0.41), so short sleep lowers focusability.
+     */
+    val sleepHoursLastNight: Double? = null
 )
 
 enum class FocusBand { LOW, MEDIUM, HIGH }
@@ -93,6 +99,17 @@ class FocusabilityEngine {
             energy != null && energy <= 2 -> { score -= 14.0; reasons.add("energy is low right now") }
             mood != null && mood >= 4 -> { score += 6.0; reasons.add("you reported feeling good") }
             mood != null && mood <= 2 -> { score -= 8.0; reasons.add("you reported feeling low") }
+        }
+
+        // Sleep is the single biggest lever on sustained attention today
+        // (Lowe et al., 2017), so it outranks the calendar rhythm below.
+        ctx.sleepHoursLastNight?.let { sleep ->
+            when {
+                sleep <= 0.0 -> Unit
+                sleep < 5.0 -> { score -= 22.0; reasons.add("very short sleep last night") }
+                sleep < 6.5 -> { score -= 12.0; reasons.add("short sleep last night") }
+                sleep >= 7.0 -> { score += 6.0; reasons.add("well rested today") }
+            }
         }
 
         // Weekday rhythm: the same hour lands differently across the week.

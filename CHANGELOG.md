@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.6.0] - 2026-10-17
+
+### Added
+- **If-then plans (implementation intentions) on tasks.** When you add a task
+  you can now name the cue that should trigger it ("after I sit at my desk")
+  and optionally pick a cue hour. The task card shows the plan as
+  *"If <cue>, then this."* and the app sends one reminder at the cue hour so you
+  start when the moment arrives. This is the best-evidenced way to close the gap
+  between intending to do something and actually doing it (Gollwitzer &
+  Sheeran, 2006, d = .65; Sheeran et al., 2024).
+- **Sleep-aware focus advice.** The focus/focusability estimate now reads last
+  night's sleep from your own records: a short night lowers the score and a
+  well-rested one raises it, because sleep restriction reliably impairs
+  sustained attention (Lowe et al., 2017, g = -0.41).
+
+### Changed
+- **Break coach is evidence-based.** Focus-session break reminders now suggest a
+  real ~10-minute rest rather than a moment away from the screen, since brief
+  breaks restore vigor and cut fatigue while longer breaks help most on
+  demanding work (Albulescu et al., 2022).
+
 ## [2.5.0] - 2026-10-17
 
 ### Fixed

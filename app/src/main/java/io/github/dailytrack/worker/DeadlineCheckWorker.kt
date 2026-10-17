@@ -27,6 +27,11 @@ import androidx.core.app.NotificationCompat
 import androidx.work.*
 import io.github.dailytrack.MainActivity
 import io.github.dailytrack.SoulTrackApp
+import io.github.dailytrack.data.db.dao.TodoDao
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class DeadlineCheckWorker(
@@ -108,7 +113,39 @@ class DeadlineCheckWorker(
             )
         }
 
+        notifyImplementationIntentions(todoDao, now)
+
         return Result.success()
+    }
+
+    /**
+     * Fires the "if-then" cue for tasks the user planned for this hour. Cue +
+     * response planning is one of the best-evidenced ways to close the gap
+     * between intending to do something and actually starting it.
+     */
+    private suspend fun notifyImplementationIntentions(todoDao: TodoDao, now: Long) {
+        val minute = Calendar.getInstance().get(Calendar.MINUTE)
+        // This worker runs every 15 minutes; announcing in the first slot keeps
+        // a cue to exactly one notification per hour.
+        if (minute >= 15) return
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(now))
+        val prefs = applicationContext.getSharedPreferences("soultrack_cue_prefs", Context.MODE_PRIVATE)
+        for (todo in todoDao.getTodosWithTriggerHour(hour)) {
+            val key = "cue_${todo.id}_$dateKey"
+            if (prefs.getBoolean(key, false)) continue
+            prefs.edit().putBoolean(key, true).apply()
+            sendNotification(
+                todoId = todo.id.toInt() + 40000,
+                title = "Time to start: ${todo.title}",
+                message = if (todo.triggerText.isNotBlank()) {
+                    "If ${todo.triggerText}, then this is your cue."
+                } else {
+                    "Your planned cue time has arrived."
+                },
+                priority = NotificationCompat.PRIORITY_DEFAULT
+            )
+        }
     }
 
     private fun createNotificationChannel() {

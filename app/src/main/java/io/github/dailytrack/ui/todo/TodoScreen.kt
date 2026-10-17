@@ -21,8 +21,10 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -407,8 +409,8 @@ fun TodoScreen(
         AddTodoDialog(
             categories = categories,
             onDismiss = { showAddDialog = false },
-            onAdd = { title, description, categoryId, deadline, estimatedMinutes, priority ->
-                viewModel.addTodo(title, description, categoryId, deadline, estimatedMinutes, priority)
+            onAdd = { title, description, categoryId, deadline, estimatedMinutes, priority, triggerText, triggerHour ->
+                viewModel.addTodo(title, description, categoryId, deadline, estimatedMinutes, priority, triggerText, triggerHour)
                 showAddDialog = false
             }
         )
@@ -706,6 +708,30 @@ fun TodoItemCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                if (todo.triggerText.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = ProductiveColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = buildString {
+                                append("If ")
+                                append(todo.triggerText)
+                                if (todo.triggerHour in 0..23) append(" · ${todo.triggerHour}:00 cue")
+                                append(", then this.")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ProductiveColor,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
@@ -1024,7 +1050,7 @@ fun LogCompletedWorkDialog(
 fun AddTodoDialog(
     categories: Map<Long, io.github.dailytrack.data.db.entity.CategoryEntity>,
     onDismiss: () -> Unit,
-    onAdd: (String, String, Long?, Long?, Int, Int) -> Unit
+    onAdd: (String, String, Long?, Long?, Int, Int, String, Int) -> Unit
 ) {
     val context = LocalContext.current
     var title by remember { mutableStateOf("") }
@@ -1033,6 +1059,8 @@ fun AddTodoDialog(
     var deadline by remember { mutableLongStateOf(0L) }
     var estimatedMinutes by remember { mutableStateOf("25") }
     var priority by remember { mutableIntStateOf(0) }
+    var triggerCue by remember { mutableStateOf("") }
+    var triggerHour by remember { mutableIntStateOf(-1) }
     var showCategoryDropdown by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -1113,6 +1141,39 @@ fun AddTodoDialog(
                         "Deadline: ${Instant.ofEpochMilli(deadline).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MMM d, HH:mm"))}"
                     } else "Set Deadline")
                 }
+
+                Text("If-then plan (optional)", style = MaterialTheme.typography.labelMedium)
+                OutlinedTextField(
+                    value = triggerCue,
+                    onValueChange = { triggerCue = it },
+                    label = { Text("If/when this happens…") },
+                    placeholder = { Text("e.g. after I sit at my desk") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Text(
+                    text = if (triggerCue.isBlank()) {
+                        "Naming the moment you'll start makes follow-through much more likely."
+                    } else {
+                        "If ${triggerCue.trim()}, then I will \"${title.ifBlank { "…" }}\"."
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(-1 to "No cue time", 7 to "7am", 9 to "9am", 12 to "12pm", 15 to "3pm", 18 to "6pm", 20 to "8pm").forEach { (h, label) ->
+                        FilterChip(
+                            selected = triggerHour == h,
+                            onClick = { triggerHour = if (triggerHour == h) -1 else h },
+                            label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
@@ -1125,7 +1186,9 @@ fun AddTodoDialog(
                             if (selectedCategoryId == 0L) null else selectedCategoryId,
                             if (deadline > 0) deadline else null,
                             estimatedMinutes.toIntOrNull() ?: 25,
-                            priority
+                            priority,
+                            triggerCue,
+                            triggerHour
                         )
                     }
                 },

@@ -440,6 +440,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .maxByOrNull { it.timestamp }
         }.getOrNull()
 
+        // Last night's sleep, from the user's own records, so a short night can
+        // temper the focus advice (sleep restriction impairs sustained attention).
+        val cats = _categories.value
+        val sleepMinutes = runCatching {
+            sessionRepo.getSessionsInRangeSync(now - 24L * 60 * 60 * 1000, now)
+                .filter { (cats[it.categoryId]?.type ?: it.type) == "SLEEP" }
+                .sumOf { session ->
+                    val end = if (session.isActive) now else (session.endTime ?: session.startTime)
+                    ((end - session.startTime).coerceAtLeast(0L)) / 60_000L
+                }
+        }.getOrDefault(0L)
+        val sleepHoursLastNight = if (sleepMinutes > 0L) sleepMinutes / 60.0 else null
+
         return FocusContext(
             hourOfDay = Instant.ofEpochMilli(now).atZone(zone).hour,
             dayOfWeek = Instant.ofEpochMilli(now).atZone(zone).dayOfWeek.value,
@@ -447,7 +460,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             minutesInCurrentSession = minutesInCurrentSession?.coerceAtLeast(0),
             quietness = NoiseMonitor.quietness(getApplication()),
             mood = recentMood?.mood,
-            energy = recentMood?.energy
+            energy = recentMood?.energy,
+            sleepHoursLastNight = sleepHoursLastNight
         )
     }
 
@@ -806,7 +820,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addTodo(title: String, description: String, categoryId: Long?, deadline: Long?, estimatedMinutes: Int, priority: Int = 0) {
+    fun addTodo(
+        title: String,
+        description: String,
+        categoryId: Long?,
+        deadline: Long?,
+        estimatedMinutes: Int,
+        priority: Int = 0,
+        triggerText: String = "",
+        triggerHour: Int = -1
+    ) {
         viewModelScope.launch {
             val todo = TodoEntity(
                 title = title,
@@ -814,7 +837,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 categoryId = categoryId,
                 deadline = deadline,
                 estimatedMinutes = estimatedMinutes,
-                priority = priority
+                priority = priority,
+                triggerText = triggerText.trim(),
+                triggerHour = triggerHour
             )
             todoRepo.insert(todo)
         }

@@ -432,13 +432,16 @@ class TimerForegroundService : Service() {
 
     private fun showBreakReminder() {
         val elapsed = (System.currentTimeMillis() - startTime) / 60000
+        // Break length guidance follows the micro-break evidence: a real rest
+        // (about 10 minutes) restores vigor and reduces fatigue far better than
+        // a few seconds away from the screen (Albulescu et al., 2022).
         val reminders = listOf(
-            "You've been working for $elapsed minutes. Time for a break!",
-            "Great focus session! Consider taking a short break to recharge.",
-            "You've been at it for a while. A quick break boosts productivity.",
-            "Stretch break time! Your body and mind will thank you.",
-            "You've earned a break. Step away for a few minutes.",
-            "Long focus sessions reduce quality. Take a 5-10 minute break."
+            "You've been working for $elapsed minutes. Take a proper 10-minute break - it restores focus more than a quick glance away.",
+            "Great focus session! A 10-minute break recharges attention and cuts fatigue.",
+            "You've been at it for a while. Step away for ~10 minutes; brief breaks beat pushing through.",
+            "Stretch break time! Give yourself 10 minutes - your body and mind will thank you.",
+            "You've earned a real break. Leave the screen for about 10 minutes.",
+            "Long focus sessions reduce quality. Take a 10-minute break before the next block."
         )
         val reminder = reminders.random()
 

@@ -33,6 +33,15 @@ data class TodoEntity(
     val actualMinutes: Int = 0,
     val pomodoroCount: Int = 0,
     val priority: Int = 0,
+    /**
+     * Implementation intention ("if-then plan"): the situation/cue that should
+     * trigger this task, e.g. "after I open my laptop at my desk". Empty when
+     * the user has not planned it. Cue + response planning has strong evidence
+     * for closing the intention-action gap (Gollwitzer & Sheeran, d = .65).
+     */
+    val triggerText: String = "",
+    /** Optional hour of day (0-23) to nudge the cue reminder; -1 = none. */
+    val triggerHour: Int = -1,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

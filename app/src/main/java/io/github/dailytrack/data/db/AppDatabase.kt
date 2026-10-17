@@ -53,7 +53,7 @@ import io.github.dailytrack.data.db.entity.*
         UserStatsEntity::class,
         ReminderEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -221,6 +221,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Implementation-intention ("if-then") planning on tasks.
+                db.execSQL("ALTER TABLE todos ADD COLUMN triggerText TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE todos ADD COLUMN triggerHour INTEGER NOT NULL DEFAULT -1")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -228,7 +236,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "soultrack.db"
                 )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance

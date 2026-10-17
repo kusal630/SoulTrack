@@ -59,8 +59,18 @@ class FocusabilityEngineTest {
     }
 
     @Test
-    fun `score never leaves the 0 to 100 range`() {
-        val worst = engine.evaluate(
+    fun `short sleep last night lowers focusability`() {
+        val rested = engine.evaluate(FocusContext(hourOfDay = 10, sleepHoursLastNight = 7.5))
+        val short = engine.evaluate(FocusContext(hourOfDay = 10, sleepHoursLastNight = 5.5))
+        val veryShort = engine.evaluate(FocusContext(hourOfDay = 10, sleepHoursLastNight = 4.0))
+        assertTrue(rested.score > short.score)
+        assertTrue(short.score > veryShort.score)
+        assertTrue(short.reasons.any { it.contains("sleep", ignoreCase = true) })
+        assertTrue(rested.reasons.any { it.contains("rested", ignoreCase = true) })
+    }
+
+    @Test
+    fun `score never leaves the 0 to 100 range`() {        val worst = engine.evaluate(
             FocusContext(hourOfDay = 3, quietness = 0, energy = 1, mood = 1, minutesSinceBreak = 300, minutesInCurrentSession = 400)
         )
         val best = engine.evaluate(
