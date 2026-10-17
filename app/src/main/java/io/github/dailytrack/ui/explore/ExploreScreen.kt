@@ -44,14 +44,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.github.dailytrack.ui.Screen
-import io.github.dailytrack.ui.components.PrimaryCta
 import io.github.dailytrack.ui.components.ScreenList
 import io.github.dailytrack.ui.components.SectionTitle
 import io.github.dailytrack.ui.components.SurfaceCard
 import io.github.dailytrack.ui.navigateSingleTop
-import io.github.dailytrack.ui.settings.AppFeatures
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.ui.platform.LocalContext
 
 private data class Destination(
     val label: String,
@@ -61,16 +57,9 @@ private data class Destination(
     val tint: Color
 )
 
-private val healthDestinations = listOf(
-    Destination("Sleep", "Debt, quality, recovery", Icons.Default.Hotel, Screen.Sleep.route, Color(0xFF818CF8)),
-    Destination("Exercise", "Workouts and strain", Icons.Default.FitnessCenter, Screen.Exercise.route, Color(0xFFF59E0B)),
-    Destination("Nutrition", "Meals, macros, hydration", Icons.Default.Restaurant, Screen.Nutrition.route, Color(0xFF34D399)),
-    Destination("Body", "Systems and symptoms", Icons.Default.Favorite, Screen.BodySystems.route, Color(0xFFF472B6))
-)
-
 private val mindDestinations = listOf(
     Destination("Focus mode", "Block distractions", Icons.Default.CenterFocusStrong, Screen.FocusMode.route, Color(0xFF10B981)),
-    Destination("Journal", "Daily reflection", Icons.Default.EditNote, Screen.Journal.route, Color(0xFF60A5FA)),
+    Destination("Saved quotes", "Words that keep you going", Icons.Default.FormatQuote, Screen.SavedQuotes.route, Color(0xFF60A5FA)),
     Destination("Targets", "Your goals and features", Icons.Default.Flag, Screen.Settings.route, Color(0xFFA78BFA)),
     Destination("Reminders", "Time and habit nudges", Icons.Default.Alarm, Screen.Reminders.route, Color(0xFFFBBF24))
 )
@@ -90,52 +79,14 @@ private val progressDestinations = listOf(
 fun ExploreScreen(navController: NavController) {
     ScreenList(
         title = "Explore",
-        subtitle = "Everything else DailyTrack tracks",
+        subtitle = "Everything else Soul Track tracks",
         navController = navController,
         compact = true
     ) {
-        if (AppFeatures.healthEnabled) {
-            item {
-                SectionTitle(
-                    title = "Health",
-                    subtitle = "Body, movement and fuel"
-                )
-            }
-            item { DestinationGrid(healthDestinations, navController) }
-        } else {
-            item {
-                val context = LocalContext.current
-                SurfaceCard(
-                    contentPadding = PaddingValues(16.dp)
-                ) {
-                    Column {
-                        Text(
-                            text = "Health layer is off",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Sleep, exercise, nutrition and the body dashboard are "
-                                + "optional. Turn them on whenever you want them.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        PrimaryCta(
-                            text = "Turn on health layer",
-                            icon = null,
-                            onClick = { AppFeatures.setHealthEnabled(true, context) }
-                        )
-                    }
-                }
-            }
-        }
         item {
             SectionTitle(
                 title = "Mind & habits",
-                subtitle = "Plan, reflect and stay on track",
-                modifier = Modifier.padding(top = 8.dp)
+                subtitle = "Plan, reflect and stay on track"
             )
         }
         item { DestinationGrid(mindDestinations, navController) }

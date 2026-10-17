@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import io.github.dailytrack.ui.navigateToHome
 import io.github.dailytrack.ui.theme.Dimens
 
 /**
@@ -79,7 +80,7 @@ fun ScreenScaffold(
     content: @Composable (PaddingValues) -> Unit
 ) {
     val backAction: (() -> Unit)? = onBack ?: navController?.let { controller ->
-        ({ controller.popBackStack() })
+        ({ controller.navigateToHome() })
     }
 
     val titleText: @Composable (Color) -> Unit = { color ->

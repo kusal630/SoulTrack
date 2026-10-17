@@ -188,11 +188,17 @@ object TimerStateStore {
      * stop can never close a session the user started a moment later.
      * Returns true if the service accepted the request.
      */
-    fun requestStop(context: Context, sessionId: Long = -1L, isPomodoro: Boolean = false): Boolean {
+    fun requestStop(
+        context: Context,
+        sessionId: Long = -1L,
+        isPomodoro: Boolean = false,
+        cascadePomodoro: Boolean = true
+    ): Boolean {
         val intent = Intent(context, TimerForegroundService::class.java).apply {
             action = TimerForegroundService.ACTION_STOP
             putExtra(TimerForegroundService.EXTRA_SESSION_ID, sessionId)
             putExtra(TimerForegroundService.EXTRA_IS_POMODORO, isPomodoro)
+            putExtra(TimerForegroundService.EXTRA_CASCADE_POMODORO, cascadePomodoro)
         }
         return runCatching { context.startService(intent); true }.getOrDefault(false)
     }

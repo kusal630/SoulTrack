@@ -41,10 +41,10 @@ interface SessionDao {
     @Query("SELECT * FROM sessions WHERE id = :id")
     suspend fun getSessionById(id: Long): SessionEntity?
 
-    @Query("SELECT * FROM sessions WHERE startTime >= :start AND startTime < :end ORDER BY startTime")
+    @Query("SELECT * FROM sessions WHERE startTime < :end AND (endTime IS NULL OR endTime > :start) ORDER BY startTime")
     fun getSessionsInRange(start: Long, end: Long): Flow<List<SessionEntity>>
 
-    @Query("SELECT * FROM sessions WHERE startTime >= :start AND startTime < :end ORDER BY startTime")
+    @Query("SELECT * FROM sessions WHERE startTime < :end AND (endTime IS NULL OR endTime > :start) ORDER BY startTime")
     suspend fun getSessionsInRangeSync(start: Long, end: Long): List<SessionEntity>
 
     @Insert

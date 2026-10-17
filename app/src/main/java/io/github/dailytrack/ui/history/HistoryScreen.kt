@@ -357,10 +357,12 @@ private fun DayTimelineBar(
                 .fillMaxWidth()
                 .height(18.dp)
         ) {
-            sessions.filter { !it.isActive }.forEach { session ->
+            sessions.forEach { session ->
                 val start = ((session.startTime - dayStart).coerceIn(0, (dayEnd - dayStart)) / span)
-                val end = ((session.endTime ?: session.startTime) - dayStart)
-                    .coerceIn(0, dayEnd - dayStart) / span
+                val sessionEnd = session.endTime
+                    ?: if (session.isActive) System.currentTimeMillis() else session.startTime
+                val end = ((sessionEnd - dayStart)
+                    .coerceIn(0, dayEnd - dayStart)) / span
                 val width = ((end - start) * size.width).coerceAtLeast(2f)
                 drawRect(
                     color = session.categoryId?.let { categoryColors[it] } ?: ProductiveColor,
@@ -374,7 +376,9 @@ private fun DayTimelineBar(
 
 @Composable
 private fun SessionRow(session: SessionEntity) {
-    val duration = (session.endTime ?: session.startTime) - session.startTime
+    val sessionEnd = session.endTime
+        ?: if (session.isActive) System.currentTimeMillis() else session.startTime
+    val duration = (sessionEnd - session.startTime).coerceAtLeast(0L)
     SurfaceCard(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -415,7 +419,12 @@ private fun statusIcon(status: DayStatus?) = when (status) {
 private fun formatHours(seconds: Long): String {
     val hours = seconds / 3600
     val minutes = (seconds % 3600) / 60
-    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+    val secs = seconds % 60
+    return when {
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "${secs}s"
+    }
 }
 
 private fun formatClock(millis: Long): String =

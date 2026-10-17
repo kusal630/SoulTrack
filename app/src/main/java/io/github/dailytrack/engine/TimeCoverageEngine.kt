@@ -39,11 +39,11 @@ data class TimeCoverage(
     val elapsedSeconds: Long = totalDaySeconds
 ) {
     val trackedRatio: Double
-        get() = if (totalDaySeconds > 0) (trackedSeconds.toDouble() / totalDaySeconds).coerceIn(0.0, 1.0) else 0.0
+        get() = if (elapsedSeconds > 0) (trackedSeconds.toDouble() / elapsedSeconds).coerceIn(0.0, 1.0) else 0.0
 
     val productivityRatio: Double
         get() {
-            val awakeSeconds = totalDaySeconds - sleepSeconds
+            val awakeSeconds = (elapsedSeconds - sleepSeconds).coerceAtLeast(0)
             return if (awakeSeconds > 0) (productiveSeconds.toDouble() / awakeSeconds).coerceIn(0.0, 1.0) else 0.0
         }
 

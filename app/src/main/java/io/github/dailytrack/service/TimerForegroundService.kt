@@ -60,6 +60,7 @@ class TimerForegroundService : Service() {
         const val EXTRA_CATEGORY = "category"
         const val EXTRA_CATEGORY_TYPE = "category_type"
         const val EXTRA_IS_POMODORO = "is_pomodoro"
+        const val EXTRA_CASCADE_POMODORO = "cascade_pomodoro"
         const val EXTRA_AUTO_DND = "auto_dnd"
         const val EXTRA_SESSION_ID = "session_id"
         const val ACTION_DND_CHANGED = "io.github.dailytrack.ACTION_DND_CHANGED"
@@ -105,7 +106,8 @@ class TimerForegroundService : Service() {
             ACTION_STOP -> {
                 stopEverything(
                     targetSessionId = intent.getLongExtra(EXTRA_SESSION_ID, -1L),
-                    stopPomodoro = intent.getBooleanExtra(EXTRA_IS_POMODORO, false)
+                    stopPomodoro = intent.getBooleanExtra(EXTRA_IS_POMODORO, false),
+                    cascadePomodoro = intent.getBooleanExtra(EXTRA_CASCADE_POMODORO, true)
                 )
                 return START_NOT_STICKY
             }
@@ -185,7 +187,7 @@ class TimerForegroundService : Service() {
         runCatching { sendBroadcast(intent) }
     }
 
-    private fun stopEverything(targetSessionId: Long, stopPomodoro: Boolean) {
+    private fun stopEverything(targetSessionId: Long, stopPomodoro: Boolean, cascadePomodoro: Boolean) {
         timerJob?.cancel()
         sedentaryJob?.cancel()
         wastedWarningJob?.cancel()
@@ -193,7 +195,12 @@ class TimerForegroundService : Service() {
         val stored = TimerStateStore.load(this)
         val pomRunning = getSharedPreferences("pom_widget_prefs", MODE_PRIVATE)
             .getBoolean("is_running", false)
-        if (stopPomodoro || stored.isPomodoro || isPomodoroSession || pomRunning) {
+        // The pomodoro service stops its own mirrored timer session when it
+        // moves from work to break. That call must NOT cascade back and kill
+        // the pomodoro service, so it explicitly asks for no cascade.
+        if (cascadePomodoro &&
+            (stopPomodoro || stored.isPomodoro || isPomodoroSession || pomRunning)
+        ) {
             val stopPomodoroIntent = Intent(this, PomodoroForegroundService::class.java)
                 .setAction(PomodoroForegroundService.ACTION_STOP)
             runCatching { startService(stopPomodoroIntent) }

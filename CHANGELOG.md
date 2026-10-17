@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.4.1] - 2026-10-17
+
+### Fixed
+- **Home navigation is now reliable.** Tapping the Home tab from any screen
+  (including deep screens opened from a Home card) always returns to Today.
+  Navigating to the graph start destination with `saveState`/`restoreState`
+  is a no-op in Navigation 2.8.x, which left the user stuck on the deep screen;
+  Home now uses the same `navigateToHome()` path as the Back button. In-app back
+  arrows and system Back now agree.
+- **Pomodoro breaks are no longer killed on start.** The pomodoro service
+  stopping its mirrored Timer session used to cascade a stop back into itself,
+  ending every break immediately. The stop now explicitly opts out of the
+  pomodoro cascade.
+- **No more orphaned/duplicated pomodoro rows.** A completed work session is
+  closed *before* the break row is inserted, instead of racing it.
+- **Honest day ratios.** `trackedRatio`/`productivityRatio` are measured against
+  elapsed time, not the full 24 hours, so midday tracking is no longer halved.
+- **Inactive sessions with a missing end time** no longer count as a full day.
+- **Wellbeing sync** clips sessions to its window and matches overlapping
+  sessions, so it cannot write duplicate usage sessions over tracked time.
+- **Timer ring** fills against the user's own focus goal instead of a hardcoded
+  8 hours, matching the Home ring.
+- **History** shows the running session (live duration and timeline) instead of
+  a zero-width bar.
+- **Pomodoro widget** no longer reads "Session 0/4" while idle and derives
+  long/short break from the real state.
+- The day coverage/untracked figure now advances every tick even with no
+  running session.
+- Fixed a lint `NewApi` error (`windowLightNavigationBar` on minSdk 24).
+
+### Removed
+- Dead and placeholder-only screens: the unreachable Growth screen plus the
+  non-functional Sleep, Exercise, Nutrition, Body and Journal screens. Saved
+  Quotes is now reachable from Explore. The app stays focused on tracking and
+  improving productive time.
+
 ## [2.3.0] - 2026-10-13
 
 ### Added

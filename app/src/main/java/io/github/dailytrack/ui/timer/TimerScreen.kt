@@ -100,6 +100,7 @@ fun TimerScreen(
     var showPermissionDialog by remember { mutableStateOf(false) }
 
     val isRunning = activeSession != null
+    val focusGoalSeconds by viewModel.focusGoalSeconds.collectAsState()
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -152,7 +153,9 @@ fun TimerScreen(
     } else 0f
 
     val ringProgress = if (isRunning) {
-        val totalSeconds = 8 * 3600L
+        // Fill the ring against the user's own focus goal (or an honest 8h
+        // fallback) so the timer and the dashboard ring agree.
+        val totalSeconds = focusGoalSeconds.takeIf { it > 0L } ?: (8 * 3600L)
         (elapsedSeconds.toFloat() / totalSeconds).coerceIn(0f, 1f)
     } else 0f
 
@@ -323,7 +326,7 @@ fun TimerScreen(
                         if (isRunning) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = selectedCategory?.name ?: "",
+                                text = activeSession?.categoryId?.let { categories[it]?.name } ?: "",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = animatedCategoryColor.copy(alpha = 0.7f)
                             )

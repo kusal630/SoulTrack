@@ -496,11 +496,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val now = System.currentTimeMillis()
-        if (_activeSession.value != null || _todaySessions.value.any { it.isActive }) {
-            _todayCoverage.value = timeEngine.calculateCoverage(
-                _todaySessions.value, _categories.value, _selectedDate.value, ZoneId.systemDefault(), now = now
-            )
-        }
+        // Recompute every tick, not only while a session runs: the elapsed
+        // part of the day keeps moving, and "unrecorded" has to grow with it.
+        _todayCoverage.value = timeEngine.calculateCoverage(
+            _todaySessions.value, _categories.value, _selectedDate.value, ZoneId.systemDefault(), now = now
+        )
 
         val overdueCount = todoRepo.getOverdueCount(now).first()
         _overdueCount.value = overdueCount
@@ -542,8 +542,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .mapNotNull { session ->
                     val end = if (session.isActive) now else session.endTime ?: return@mapNotNull null
                     if (end <= session.startTime) return@mapNotNull null
-                    java.time.Instant.ofEpochMilli(session.startTime) to
-                        java.time.Instant.ofEpochMilli(end)
+                    // Clip to the rolling window so a session that started
+                    // yesterday is not counted in full.
+                    java.time.Instant.ofEpochMilli(maxOf(session.startTime, windowStart)) to
+                        java.time.Instant.ofEpochMilli(minOf(end, now))
                 }
 
             val labels = intervals.map { it.packageName to AndroidUsageCollector.describe(app, it.packageName).first }
@@ -1147,7 +1149,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun sessionEndWithinDay(session: SessionEntity, dayEnd: Long, now: Long): Long = when {
         session.isActive -> minOf(now, dayEnd)
         session.endTime != null -> minOf(session.endTime, dayEnd)
-        else -> dayEnd
+        // An inactive row without an end time is corrupt/legacy data. Counting
+        // it as "the whole day" would inflate every day from its start onward,
+        // so it contributes no time at all.
+        else -> session.startTime
     }
 
     private fun sessionMinutesWithinDay(

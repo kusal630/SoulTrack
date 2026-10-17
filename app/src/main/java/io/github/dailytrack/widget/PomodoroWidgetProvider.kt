@@ -240,9 +240,17 @@ class PomodoroWidgetProvider : AppWidgetProvider() {
         val isBreak = prefs.getBoolean("is_break", false)
         val durationIndex = prefs.getInt("duration_index", 0)
         val sessionNumber = prefs.getInt("session_number", 0)
+        val isLongBreakPref = prefs.getBoolean("is_long_break", false)
         val workColor = 0xFF4FD1E8.toInt()
 
-        views.setTextViewText(R.id.widget_pom_session_count, "Session $sessionNumber/4")
+        views.setTextViewText(
+            R.id.widget_pom_session_count,
+            when {
+                !isRunning -> "Pomodoro"
+                isBreak -> "Break"
+                else -> "Session ${sessionNumber}/4"
+            }
+        )
         views.setTextViewText(R.id.widget_pom_duration, "${WORK_DURATIONS[durationIndex]} min")
 
         if (isRunning && startTime > 0) {
@@ -256,10 +264,9 @@ class PomodoroWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_pom_timer, timeStr)
 
             if (isBreak) {
-                val isLongBreak = sessionNumber % 4 == 0
                 views.setTextViewText(
                     R.id.widget_pom_status,
-                    if (isLongBreak) "Long Break" else "Short Break"
+                    if (isLongBreakPref) "Long Break" else "Short Break"
                 )
                 views.setTextColor(R.id.widget_pom_timer, 0xFF5B9DFF.toInt())
             } else {

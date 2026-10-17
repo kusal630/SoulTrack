@@ -42,18 +42,12 @@ import io.github.dailytrack.ui.timer.TimerScreen
 import io.github.dailytrack.ui.todo.TodoScreen
 import io.github.dailytrack.ui.pomodoro.PomodoroScreen
 import io.github.dailytrack.ui.insights.InsightsScreen
-import io.github.dailytrack.ui.growth.GrowthScreen
 import io.github.dailytrack.ui.settings.SettingsScreen
 import io.github.dailytrack.ui.savedquotes.SavedQuotesScreen
 import io.github.dailytrack.ui.sync.SyncSettingsScreen
 import io.github.dailytrack.ui.habit.HabitScreen
 import io.github.dailytrack.ui.explore.ExploreScreen
-import io.github.dailytrack.ui.sleep.SleepScreen
-import io.github.dailytrack.ui.exercise.ExerciseScreen
-import io.github.dailytrack.ui.nutrition.NutritionScreen
-import io.github.dailytrack.ui.body.BodySystemsScreen
 import io.github.dailytrack.ui.focus.FocusModeScreen
-import io.github.dailytrack.ui.journal.JournalScreen
 import io.github.dailytrack.ui.reminders.RemindersScreen
 import io.github.dailytrack.ui.history.HistoryScreen
 import io.github.dailytrack.ui.insights.WeeklyReportScreen
@@ -70,19 +64,13 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Timer : Screen("timer", "Timer", Icons.Default.Timer)
     data object Todo : Screen("todo", "Todo", Icons.Default.CheckCircle)
     data object Pomodoro : Screen("pomodoro", "Pomodoro", Icons.Default.Coffee)
-    data object Growth : Screen("growth", "Growth", Icons.Default.TrendingUp)
     data object Insights : Screen("insights", "Insights", Icons.Default.Lightbulb)
     data object Settings : Screen("settings", "Settings", Icons.Default.Settings)
     data object SavedQuotes : Screen("saved_quotes", "Saved Quotes", Icons.Default.Favorite)
     data object SyncSettings : Screen("sync_settings", "Sync", Icons.Default.Sync)
     data object Habits : Screen("habits", "Habits", Icons.Default.Flag)
     data object Explore : Screen("explore", "Explore", Icons.Default.Explore)
-    data object Sleep : Screen("sleep", "Sleep", Icons.Default.Hotel)
-    data object Exercise : Screen("exercise", "Exercise", Icons.Default.FitnessCenter)
-    data object Nutrition : Screen("nutrition", "Nutrition", Icons.Default.Restaurant)
-    data object BodySystems : Screen("body_systems", "Body", Icons.Default.Favorite)
     data object FocusMode : Screen("focus_mode", "Focus", Icons.Default.CenterFocusStrong)
-    data object Journal : Screen("journal", "Journal", Icons.Default.EditNote)
     data object Reminders : Screen("reminders", "Reminders", Icons.Default.Alarm)
     data object History : Screen("history", "History", Icons.Default.History)
     data object WeeklyReport : Screen("weekly_report", "Report", Icons.Default.Assessment)
@@ -178,12 +166,20 @@ fun DailyTrackNavHost() {
                         },
                         selected = isSelected,
                         onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            if (screen.route == Screen.Dashboard.route) {
+                                // Home is the graph start destination. Navigating to
+                                // it with saveState/restoreState is a no-op in
+                                // Navigation 2.8.x and can leave the user stuck on a
+                                // deep screen, so always pop straight back home.
+                                navController.navigateToHome()
+                            } else {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         colors = NavigationBarItemDefaults.colors(
@@ -208,7 +204,6 @@ fun DailyTrackNavHost() {
             composable(Screen.Timer.route) { TimerScreen(navController) }
             composable(Screen.Todo.route) { TodoScreen(navController) }
             composable(Screen.Pomodoro.route) { PomodoroScreen(navController) }
-            composable(Screen.Growth.route) { GrowthScreen(navController) }
             composable(Screen.Insights.route) { InsightsScreen(navController) }
             composable(Screen.Settings.route) { SettingsScreen(navController) }
             composable(Screen.SavedQuotes.route) { SavedQuotesScreen(navController) }
@@ -216,11 +211,6 @@ fun DailyTrackNavHost() {
                 SyncSettingsScreen(navController, app.syncManager)
             }
             composable(Screen.Explore.route) { ExploreScreen(navController) }
-            composable(Screen.Sleep.route) { SleepScreen(navController) }
-            composable(Screen.Exercise.route) { ExerciseScreen(navController) }
-            composable(Screen.Nutrition.route) { NutritionScreen(navController) }
-            composable(Screen.BodySystems.route) { BodySystemsScreen(navController) }
-            composable(Screen.Journal.route) { JournalScreen(navController) }
             composable(Screen.History.route) { HistoryScreen(navController) }
             composable(Screen.FocusMode.route) {
                 var focusActive by rememberSaveable { mutableStateOf(false) }

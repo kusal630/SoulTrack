@@ -299,20 +299,6 @@ class PomodoroForegroundService : Service() {
         sedentaryJob?.cancel()
         playCompletionVibration()
 
-        val db = (applicationContext as SoulTrackApp).database
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching {
-                val now = System.currentTimeMillis()
-                val active = db.pomodoroSessionDao().getActivePomodoroSync()
-                if (active != null && active.type == "WORK") {
-                    val plannedEnd = active.startTime + active.durationMinutes * 60_000L
-                    val end = maxOf(active.startTime, minOf(now, plannedEnd))
-                    db.pomodoroSessionDao().completePomodoro(active.id, end)
-                    creditTodo(active, end, naturalCompletion = true, db = db)
-                }
-            }
-        }
-
         currentSessionNumber++
         showCompletionNotification(
             "Session $currentSessionNumber completed!",
@@ -320,11 +306,21 @@ class PomodoroForegroundService : Service() {
         )
 
         val longBreak = currentSessionNumber % 4 == 0
-        startBreakSession(
-            durationMinutes = if (longBreak) longBreakDurationMinutes else breakDurationMinutes,
-            isLong = longBreak
-        )
-        transitioning = false
+        // Close the WORK row first, then start the break. Both steps touch the
+        // same "active pomodoro" row, so the completion must not race the
+        // break insert or the break would be mistaken for the work session.
+        scope.launch {
+            completeActivePomodoro("WORK")
+            if (stopped) {
+                transitioning = false
+                return@launch
+            }
+            startBreakSession(
+                durationMinutes = if (longBreak) longBreakDurationMinutes else breakDurationMinutes,
+                isLong = longBreak
+            )
+            transitioning = false
+        }
     }
 
     private fun onBreakComplete() {
@@ -334,26 +330,40 @@ class PomodoroForegroundService : Service() {
         sedentaryJob?.cancel()
         playCompletionVibration()
 
-        val db = (applicationContext as SoulTrackApp).database
-        CoroutineScope(Dispatchers.IO).launch {
-            runCatching {
-                val now = System.currentTimeMillis()
-                val active = db.pomodoroSessionDao().getActivePomodoroSync()
-                if (active != null && active.type == "BREAK") {
-                    val plannedEnd = active.startTime + active.durationMinutes * 60_000L
-                    db.pomodoroSessionDao().completePomodoro(active.id, minOf(now, plannedEnd))
-                }
-            }
-        }
-
         showCompletionNotification(
             "Break ended",
             "Ready for the next focus session?"
         )
 
-        if (isLongBreak) currentSessionNumber = 0
-        startWorkSession(workDurationMinutes, todoTitle)
-        transitioning = false
+        val wasLong = isLongBreak
+        scope.launch {
+            completeActivePomodoro("BREAK")
+            if (stopped) {
+                transitioning = false
+                return@launch
+            }
+            if (wasLong) currentSessionNumber = 0
+            startWorkSession(workDurationMinutes, todoTitle)
+            transitioning = false
+        }
+    }
+
+    /** Completes the active pomodoro row of [type] and credits its task. */
+    private suspend fun completeActivePomodoro(type: String) {
+        val db = (applicationContext as SoulTrackApp).database
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val now = System.currentTimeMillis()
+                val active = db.pomodoroSessionDao().getActivePomodoroSync() ?: return@runCatching
+                if (active.type != type) return@runCatching
+                val plannedEnd = active.startTime + active.durationMinutes * 60_000L
+                val end = maxOf(active.startTime, minOf(now, plannedEnd))
+                db.pomodoroSessionDao().completePomodoro(active.id, end)
+                if (type == "WORK") {
+                    creditTodo(active, end, naturalCompletion = true, db = db)
+                }
+            }
+        }
     }
 
     private fun stopAll() {
@@ -451,7 +461,7 @@ class PomodoroForegroundService : Service() {
             }
         }
 
-        TimerStateStore.requestStop(this, stored.sessionId, isPomodoro = true)
+        TimerStateStore.requestStop(this, stored.sessionId, isPomodoro = true, cascadePomodoro = false)
         TimerStateStore.clear(this)
         runCatching { TimerWidgetProvider.updateWidgets(this) }
     }

@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.dailytrack"
         minSdk = 24
         targetSdk = 35
-        versionCode = 11
-        versionName = "2.4.0"
+        versionCode = 12
+        versionName = "2.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

@@ -4,10 +4,9 @@
 
 Soul Track is a **time tracker first**: every second you track feeds the day
 ring, the growth score, the routine/comfort-zone detection and the insights.
-Sleep, food, exercise and the body dashboard are an **optional layer** you can
-switch on during onboarding (or off again in Settings) — and every number the
-app shows is computed from your own records. Nothing is stored in the cloud,
-there are no accounts, no ads and no tracking.
+It is built to answer one question — where did my time go, and how do I get
+more of it back? Every number the app shows is computed from your own records.
+Nothing is stored in the cloud, there are no accounts, no ads and no tracking.
 
 ## The rings
 
@@ -24,15 +23,8 @@ aqua → sky gradient and Manrope typography. See [RESEARCH/DESIGN.md](RESEARCH/
 - **Productivity Analysis**: Track productive, wasted, neutral, learning, and exercise time
 - **Growth Score**: Transparent daily score from weighted components
 - **Routine Loop Detection**: Detect repetitive patterns using cosine similarity
-- **Food & Drink Logging**: Full nutrition tracking with macro and micronutrients
-- **Hydration Tracking**: Water intake with configurable goals
-- **Sleep & Recovery**: Sleep debt calculation and recovery warnings
-- **Exercise & Movement**: Exercise logging and inactivity detection
-- **Body Systems Dashboard**: Educational health indicator cards
-- **Mood & Journal**: Quick check-ins and daily reflections
-- **Life Events**: Life timeline and milestones
 - **Insights Center**: Personalized warnings and suggestions
-- **Analytics**: Charts and trend analysis
+- **Our own targets and calibration**: set productive/learning minutes in Settings, or let the app calibrate from your trailing fortnight
 - **Export/Import**: JSON and CSV backup/restore
 - **Settings**: Profile, targets, privacy controls
 - **Soul Rings**: inner ring = today's tasks, outer ring = 7 day statuses
@@ -49,9 +41,6 @@ aqua → sky gradient and Manrope typography. See [RESEARCH/DESIGN.md](RESEARCH/
 - **Intelligent task recommendation**: the Dashboard picks the next task from
   your own history, the current focus level, mood and energy — and always
   prefers the task already in flight over starting a new context
-- **Optional health layer**: sleep, exercise, nutrition, hydration and the
-  body dashboard are asked about once at start and toggled in Settings;
-  turning them off redistributes the growth weights instead of scoring zeros
 - **Your own targets**: productive/learning/exercise minutes, sleep hours,
   water and pomodoro goals are set in Settings, and anything you leave empty
   is calibrated from your own trailing fortnight

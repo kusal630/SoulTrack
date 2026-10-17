@@ -58,6 +58,8 @@ import io.github.dailytrack.data.api.QuotesApi
 import io.github.dailytrack.data.db.entity.TodoEntity
 import io.github.dailytrack.ui.components.*
 import io.github.dailytrack.ui.navigateToHome
+import io.github.dailytrack.ui.navigateSingleTop
+import io.github.dailytrack.ui.Screen
 import io.github.dailytrack.ui.components.SurfaceCard
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalView
@@ -211,7 +213,7 @@ fun PomodoroScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { navController.navigate("saved_quotes") }) {
+                    IconButton(onClick = { navController.navigateSingleTop(Screen.SavedQuotes.route) }) {
                         Icon(Icons.Default.Favorite, contentDescription = "Saved Quotes")
                     }
                 }
