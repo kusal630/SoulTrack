@@ -506,6 +506,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _overdueCount.value = overdueCount
 
         reconcileStalePomodoro(now)
+        reconcileStaleSession(now)
         syncWellbeing(now)
         refreshBrain()
     }
@@ -530,7 +531,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         lastWellbeingSyncAt = now
 
         runCatching {
-            val zone = ZoneId.systemDefault()
             val windowStart = now - 24 * 60 * 60_000L
             val intervals = AndroidUsageCollector.collect(app, windowStart, now)
             if (intervals.isEmpty()) {
@@ -563,39 +563,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val windowMillis = now - windowStart
             _wellbeing.value = WellbeingSummary.from(segments, windowMillis, alreadyTracked)
-
-            val selfPackage = app.packageName
-            for (segment in segments) {
-                val pkg = intervals.firstOrNull {
-                    it.start <= segment.start && segment.end <= it.end
-                }?.packageName ?: continue
-                if (pkg == selfPackage) continue
-
-                // Never write over time that is already recorded.
-                val overlaps = tracked.any { (a, b) ->
-                    segment.start < b && a < segment.end
-                }
-                if (overlaps) continue
-
-                val type = when (segment.kind) {
-                    UsageKind.PRODUCTIVE -> "PRODUCTIVE"
-                    UsageKind.WASTED -> "WASTED"
-                    UsageKind.NEUTRAL -> "NEUTRAL"
-                }
-                sessionRepo.insert(
-                    SessionEntity(
-                        title = segment.label,
-                        categoryId = null,
-                        todoId = null,
-                        type = type,
-                        startTime = segment.start.toEpochMilli(),
-                        endTime = segment.end.toEpochMilli(),
-                        isActive = false,
-                        source = "USAGE",
-                        timezoneId = zone.id
-                    )
-                )
-            }
         }
     }
 
@@ -605,6 +572,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             wellbeingClassifier.setOverride(packageName, label)
             lastWellbeingSyncAt = 0L
             syncWellbeing()
+        }
+    }
+
+    /**
+     * A session left active on a previous day can never be real tracking - the
+     * service would have had to run for well over a day. Such a row would keep
+     * growing every day from its start onward (the "phantom hours"), so it is
+     * closed at its own start rather than counted as work.
+     */
+    private suspend fun reconcileStaleSession(now: Long) {
+        runCatching {
+            val (todayStart, _) = getDayRange(LocalDate.now(), ZoneId.systemDefault())
+            val active = db.sessionDao().getActiveSessionSync() ?: return
+            if (active.startTime >= todayStart) return
+            db.sessionDao().stopSessionById(active.id, active.startTime)
+            val app = getApplication<Application>()
+            if (TimerStateStore.load(app).sessionId == active.id) {
+                TimerStateStore.clear(app)
+                runCatching { TimerWidgetProvider.updateWidgets(app) }
+            }
         }
     }
 
@@ -980,14 +967,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val sessions = sessionRepo.getSessionsForDaySync(dayStart, dayEnd)
         val minutes = minutesFor(sessions, _categories.value, dayStart, dayEnd, now)
 
+        // Days tracked in the trailing week (not an unbroken streak): consistency
+        // should reward showing up on most days, and a single missed day should
+        // not wipe the score to zero.
         var consecutiveDaysActive = 0
         for (i in 0..6) {
             val date = today.minusDays(i.toLong())
             val (dStart, dEnd) = getDayRange(date, zone)
             if (hasTrackedTime(dStart, dEnd, now)) {
                 consecutiveDaysActive++
-            } else {
-                break
             }
         }
 
@@ -1106,12 +1094,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val targets = GrowthTargets(
             learningMinutes = ProductTargets.learningMinutes.takeIf { it > 0 }?.toDouble()
-                ?: percentileOr(learning, GrowthEngine.TARGET_LEARNING_MINUTES),
+                ?: percentileOr(learning, GrowthEngine.TARGET_LEARNING_MINUTES, floor = 60.0),
             productiveMinutes = ProductTargets.productiveMinutes.takeIf { it > 0 }?.toDouble()
-                ?: percentileOr(productive, GrowthEngine.TARGET_PRODUCTIVE_MINUTES),
+                ?: percentileOr(productive, GrowthEngine.TARGET_PRODUCTIVE_MINUTES, floor = 120.0),
             exerciseMinutes = ProductTargets.exerciseMinutes.takeIf { it > 0 }?.toDouble()
-                ?: percentileOr(exercise, GrowthEngine.TARGET_EXERCISE_MINUTES),
-            socialMinutes = percentileOr(social, GrowthEngine.TARGET_SOCIAL_MINUTES),
+                ?: percentileOr(exercise, GrowthEngine.TARGET_EXERCISE_MINUTES, floor = 30.0),
+            socialMinutes = percentileOr(social, GrowthEngine.TARGET_SOCIAL_MINUTES, floor = 20.0),
             sleepBand = sleepBand
         )
         cachedGrowthTargets = targets
@@ -1119,13 +1107,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return targets
     }
 
-    /** 75th percentile of the days the user actually tracked, or [fallback]. */
-    private fun percentileOr(values: List<Double>, fallback: Double): Double {
+    /**
+     * 75th percentile of the days the user actually tracked, or [fallback].
+     * The percentile can be dragged down by a few light days, so a [floor]
+     * keeps "enough" honest: hitting 15 real minutes should not read as 100%.
+     */
+    private fun percentileOr(values: List<Double>, fallback: Double, floor: Double = 30.0): Double {
         val usable = values.filter { it > 0.0 }
         if (usable.size < 3) return fallback
         val sorted = usable.sorted()
         val index = ((sorted.size - 1) * 0.75).toInt().coerceIn(0, sorted.lastIndex)
-        return sorted[index].coerceAtLeast(5.0)
+        return sorted[index].coerceAtLeast(floor)
     }
 
     private fun medianOr(values: List<Double>, fallback: Double): Double? {

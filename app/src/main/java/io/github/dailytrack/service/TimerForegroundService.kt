@@ -208,8 +208,11 @@ class TimerForegroundService : Service() {
         scope.launch {
             closeActiveSession(targetSessionId)
             NoiseMonitor.stop()
-            FocusDndManager.restore(this@TimerForegroundService)
-            TimerStateStore.clear(this@TimerForegroundService)
+            val pomodoroTookOver = TimerStateStore.load(this@TimerForegroundService).isPomodoro
+            if (!pomodoroTookOver) {
+                FocusDndManager.restore(this@TimerForegroundService)
+                TimerStateStore.clear(this@TimerForegroundService)
+            }
             notificationManager?.cancel(NOTIFICATION_ID)
             notificationManager?.cancel(SEDENTARY_NOTIFICATION_ID)
             stopForeground(STOP_FOREGROUND_REMOVE)

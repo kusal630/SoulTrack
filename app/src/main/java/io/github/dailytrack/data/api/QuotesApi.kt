@@ -652,22 +652,67 @@ object QuotesApi {
 
     suspend fun fetchOnlineQuotes(): List<Quote> {
         return withContext(Dispatchers.IO) {
-            try {
-                val url = URL("https://zenquotes.io/api/quotes")
-                val connection = url.openConnection()
-                val inputStream = connection.getInputStream()
-                val response = inputStream.bufferedReader().use { it.readText() }
-                val arr = JSONArray(response)
-                val quotes = (0 until arr.length()).map { i ->
-                    val obj = arr.getJSONObject(i)
-                    Quote(obj.getString("q"), obj.getString("a"))
+            val merged = LinkedHashMap<String, Quote>()
+            for (source in listOf<() -> List<Quote>>(
+                ::fetchFromQuotable,
+                ::fetchFromDummyJson,
+                ::fetchFromZenQuotes
+            )) {
+                runCatching { source() }.getOrDefault(emptyList()).forEach { quote ->
+                    val text = quote.text.trim()
+                    if (text.length !in 16..240) return@forEach
+                    merged.putIfAbsent(text.lowercase(), quote.copy(text = text))
                 }
+            }
+            val quotes = merged.values.toList()
+            if (quotes.isNotEmpty()) {
                 onlineQuotes = quotes
                 saveOnlineQuotesToPrefs(quotes)
-                quotes
-            } catch (_: Exception) {
-                emptyList()
             }
+            quotes
+        }
+    }
+
+    private fun readJson(url: String): String {
+        val connection = (URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 8_000
+            readTimeout = 8_000
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "SoulTrack/1.0 (Android)")
+        }
+        return connection.inputStream.bufferedReader().use { it.readText() }
+    }
+
+    /** Quotable: a large curated pool, the best source when it is reachable. */
+    private fun fetchFromQuotable(): List<Quote> {
+        val arr = JSONArray(readJson("https://api.quotable.io/quotes/random?limit=50&maxLength=200"))
+        return (0 until arr.length()).mapNotNull { i ->
+            val obj = arr.getJSONObject(i)
+            val text = obj.optString("content").ifBlank { obj.optString("quote") }
+            if (text.isBlank()) null else Quote(text, obj.optString("author").ifBlank { "Unknown" })
+        }
+    }
+
+    /** DummyJSON: a dependable public mirror when Quotable is rate limited. */
+    private fun fetchFromDummyJson(): List<Quote> {
+        val arr = JSONObject(readJson("https://dummyjson.com/quotes?limit=100")).optJSONArray("quotes")
+            ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val obj = arr.getJSONObject(i)
+            val text = obj.optString("quote")
+            if (text.isBlank()) null else Quote(text, obj.optString("author").ifBlank { "Unknown" })
+        }
+    }
+
+    /** ZenQuotes: classic fallback for short, anonymous-style lines. */
+    private fun fetchFromZenQuotes(): List<Quote> {
+        val arr = JSONArray(readJson("https://zenquotes.io/api/quotes"))
+        return (0 until arr.length()).mapNotNull { i ->
+            val obj = arr.getJSONObject(i)
+            val text = obj.optString("q")
+            val author = obj.optString("a")
+            if (text.isBlank() || author.equals("zenquotes.io", ignoreCase = true)) null
+            else Quote(text, author.ifBlank { "Unknown" })
         }
     }
 

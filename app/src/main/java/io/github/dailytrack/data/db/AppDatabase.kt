@@ -53,7 +53,7 @@ import io.github.dailytrack.data.db.entity.*
         UserStatsEntity::class,
         ReminderEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -210,6 +210,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Phone-usage rows were auto-inserted as if they were tracked
+                // work, which is what produced the phantom "41h" days. Only
+                // time the user actually started from the app may count, so the
+                // legacy usage rows are removed. The live wellbeing summary is
+                // recomputed from UsageStatsManager and needs no stored rows.
+                db.execSQL("DELETE FROM sessions WHERE source = 'USAGE'")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -217,7 +228,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "soultrack.db"
                 )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance

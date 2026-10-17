@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.5.0] - 2026-10-17
+
+### Fixed
+- **Phantom productivity hours are gone.** Phone-usage time was being written
+  into the sessions table as if it were work the user had done, which is what
+  produced impossible days (the "41h tracked" report). Usage is now read live
+  for the Direction card only; it is never stored as tracked time. A database
+  migration removes the legacy usage rows from existing installs.
+- **Stale sessions can no longer run forever.** A session left active from a
+  previous day is closed at its own start on next launch/tick, so a killed
+  service can never inflate every following day.
+- **No more double timer.** Starting a pomodoro no longer also launches the
+  standalone timer service, so there is only ever one timer notification. If a
+  plain timer was running, the pomodoro takes it over; `reconcile` never
+  auto-starts the timer service for a pomodoro.
+- **Rotation no longer reloads the app.** The splash/logo state survives
+  configuration changes (`rememberSaveable`), so rotating the phone keeps you
+  where you were.
+- **Insight actions are real buttons.** The suggested action on each insight is
+  now tappable and opens the relevant screen (Tasks, Timer, Habits or Explore)
+  instead of being dead text.
+- **Growth score is honest.** Consistency counts the days you actually tracked
+  in the trailing week rather than resetting to zero on a single missed day, and
+  target floors stop a couple of light days from making the score saturate.
+
+### Changed
+- **Better quotes, refreshed automatically.** Online quotes are now merged from
+  several curated sources and de-duplicated for a larger, higher-quality pool.
+- **Smarter timing.** The focus/focusability estimate now weighs the weekday
+  rhythm (Monday warm-up, mid-week peak, weekend pace) alongside hour, noise,
+  mood and energy.
+
 ## [2.4.1] - 2026-10-17
 
 ### Fixed

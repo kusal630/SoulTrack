@@ -95,6 +95,15 @@ class FocusabilityEngine {
             mood != null && mood <= 2 -> { score -= 8.0; reasons.add("you reported feeling low") }
         }
 
+        // Weekday rhythm: the same hour lands differently across the week.
+        // `dayOfWeek` follows ISO (1 = Monday); 0 means "unknown" and is ignored.
+        when (ctx.dayOfWeek) {
+            1 -> { score -= 3.0; reasons.add("easing into the week") }
+            in 2..5 -> { score += 3.0 }
+            6, 7 -> { score -= 6.0; reasons.add("weekend pace") }
+            else -> Unit
+        }
+
         val clamped = score.coerceIn(0.0, 100.0).toInt()
         return Focusability(
             score = clamped,

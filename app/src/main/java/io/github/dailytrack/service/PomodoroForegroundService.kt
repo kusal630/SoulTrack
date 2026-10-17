@@ -394,6 +394,14 @@ class PomodoroForegroundService : Service() {
      */
     private fun startTrackingSession(title: String, sessionStart: Long = System.currentTimeMillis()) {
         val db = (applicationContext as SoulTrackApp).database
+        // If a plain timer was running, hand the timer over to the pomodoro
+        // instead of letting a second notification (and a second timer) exist.
+        // The pomodoro owns the notification from here on; it never starts the
+        // standalone TimerForegroundService.
+        val previous = TimerStateStore.load(this)
+        if (TimerStateStore.isServiceAlive() && !previous.isPomodoro) {
+            TimerStateStore.requestStop(this, previous.sessionId, isPomodoro = false, cascadePomodoro = false)
+        }
         CoroutineScope(Dispatchers.IO).launch {
             db.sessionDao().deactivateAllSessions(sessionStart)
 
@@ -443,9 +451,6 @@ class PomodoroForegroundService : Service() {
                 autoDnd = true
             )
             TimerStateStore.publish(this@PomodoroForegroundService, state)
-            withContext(Dispatchers.Main) {
-                TimerStateStore.startTimerService(this@PomodoroForegroundService, state)
-            }
         }
     }
 
@@ -461,7 +466,12 @@ class PomodoroForegroundService : Service() {
             }
         }
 
-        TimerStateStore.requestStop(this, stored.sessionId, isPomodoro = true, cascadePomodoro = false)
+        // Only a plain timer that is actually running needs the ACTION_STOP
+        // (which also tears down its notification). Starting the service just to
+        // deliver a stop would flash a notification, so it is guarded.
+        if (TimerStateStore.isServiceAlive()) {
+            TimerStateStore.requestStop(this, stored.sessionId, isPomodoro = true, cascadePomodoro = false)
+        }
         TimerStateStore.clear(this)
         runCatching { TimerWidgetProvider.updateWidgets(this) }
     }

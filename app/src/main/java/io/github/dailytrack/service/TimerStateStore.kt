@@ -146,7 +146,9 @@ object TimerStateStore {
                     autoDnd = existing.autoDnd || isFocusType(category?.type ?: active.type)
                 )
                 if (merged != existing) publish(app, merged)
-                if (!serviceAlive) startTimerService(app, merged)
+                // A pomodoro mirrors its time here but owns its own notification
+                // and DND, so it must never spin up the standalone timer service.
+                if (!serviceAlive && !merged.isPomodoro) startTimerService(app, merged)
             } else {
                 val existing = load(app)
                 if (existing.isRunning || existing.startTime > 0L) clear(app)

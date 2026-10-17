@@ -197,13 +197,30 @@ fun InsightsScreen(
             items(activeInsights, key = { it.id }) { insight ->
                 InsightDetailCard(
                     insight = insight,
-                    onDismiss = { viewModel.dismissInsight(insight.id) }
+                    onDismiss = { viewModel.dismissInsight(insight.id) },
+                    onAction = insightAction(navController, insight)
                 )
             }
         }
 
         item { Spacer(modifier = Modifier.height(8.dp)) }
     }
+}
+
+/**
+ * Turns an insight's suggested action into a real navigation. Insights that
+ * have no corresponding place to go (for example "seek help if needed") return
+ * null, so the hint stays plain text instead of a button that does nothing.
+ */
+private fun insightAction(navController: NavController, insight: InsightEntity): (() -> Unit)? {
+    val route = when (insight.category.uppercase()) {
+        "GROWTH" -> Screen.Todo.route
+        "ROUTINE" -> Screen.Habits.route
+        "TIME", "PRODUCTIVITY", "EXERCISE" -> Screen.Timer.route
+        "SLEEP", "HYDRATION", "NUTRITION", "JOURNAL", "MOOD" -> Screen.Explore.route
+        else -> null
+    } ?: return null
+    return { navController.navigateSingleTop(route) }
 }
 
 @Composable
@@ -701,8 +718,7 @@ fun PomodoroStatsCard(
 }
 
 @Composable
-fun InsightDetailCard(insight: InsightEntity, onDismiss: () -> Unit) {
-    SurfaceCard(
+fun InsightDetailCard(insight: InsightEntity, onDismiss: () -> Unit, onAction: (() -> Unit)? = null) {    SurfaceCard(
         containerColor = when (insight.severity) {
             "CRITICAL" -> MaterialTheme.colorScheme.errorContainer
             "WARNING" -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
@@ -748,11 +764,32 @@ fun InsightDetailCard(insight: InsightEntity, onDismiss: () -> Unit) {
                 )
                 if (insight.actionLabel.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = insight.actionLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    if (onAction != null) {
+                        TextButton(
+                            onClick = onAction,
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(
+                                text = insight.actionLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = insight.actionLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
