@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.1] - 2026-10-17
+
+### Added
+- **Goal progress on Today.** Active goals now appear as concrete progress
+  bars on the dashboard, so progress is recorded and reported back to you.
+  Seeing measured progress is one of the more reliable ways to keep moving
+  toward a goal (Harkin et al., 2015, 138 studies, d+ = 0.40).
+
 ## [2.6.0] - 2026-10-17
 
 ### Added

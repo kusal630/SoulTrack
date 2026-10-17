@@ -179,6 +179,19 @@ class DayClassificationTest {
     }
 
     @Test
+    fun `goal progress is current over target and clamps`() {
+        assertEquals(0.5f, goalProgress(5f, 10f), 1e-6f)
+        assertEquals(1f, goalProgress(12f, 10f), 1e-6f)
+        assertEquals(0f, goalProgress(0f, 10f), 1e-6f)
+    }
+
+    @Test
+    fun `goal progress with no target is zero not nan`() {
+        assertEquals(0f, goalProgress(5f, 0f), 1e-6f)
+        assertTrue(!goalProgress(5f, 0f).isNaN())
+    }
+
+    @Test
     fun `weighted progress favours long estimates`() {
         val tasks = listOf(
             TaskWeight(id = 1, estimatedMinutes = 90),

@@ -156,6 +156,17 @@ fun dayProgress(assignedTasks: Int, completedTasks: Int): Float {
 }
 
 /**
+ * Progress toward a goal, 0f..1f. A target of 0 (or less) means "no target
+ * set", so the progress is unknown and reported as 0 rather than dividing by
+ * zero. Monitoring and reporting goal progress is a proven way to raise
+ * attainment (Harkin et al., 2015, 138 studies, d+ = 0.40).
+ */
+fun goalProgress(currentHours: Float, targetHours: Float): Float {
+    if (targetHours <= 0f) return 0f
+    return (currentHours / targetHours).coerceIn(0f, 1f)
+}
+
+/**
  * Optional minute-weighted progress: a 90 minute task moves the ring more
  * than a 5 minute one. Falls back to the plain ratio when no estimate exists.
  */

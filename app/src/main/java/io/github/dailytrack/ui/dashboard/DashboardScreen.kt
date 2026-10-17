@@ -76,11 +76,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SessionEntity
 import io.github.dailytrack.data.db.entity.TodoEntity
+import io.github.dailytrack.data.db.entity.GoalEntity
 import androidx.compose.foundation.BorderStroke
 import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.engine.SwitchReport
 import io.github.dailytrack.engine.dayProgress
 import io.github.dailytrack.engine.focusProgress
+import io.github.dailytrack.engine.goalProgress
 import io.github.dailytrack.engine.recordedDayProgress
 import io.github.dailytrack.engine.todayProgressLabel
 import io.github.dailytrack.engine.weekStatusLabel
@@ -159,6 +161,8 @@ fun DashboardScreen(
     val allTodos = remember(activeTodos, completedTodos) { activeTodos + completedTodos }
 
     val focusGoalSeconds by viewModel.focusGoalSeconds.collectAsState()
+    val goals by viewModel.goals.collectAsState()
+    val activeGoals = remember(goals) { goals.filter { !it.isCompleted && !it.isArchived } }
 
     // The ring is one number for one day: finished tasks and recorded focus
     // time both earn it. Nothing moves the ring that was not written down.
@@ -240,6 +244,12 @@ fun DashboardScreen(
                 categoryName = activeSession?.categoryId?.let { categories[it]?.name } ?: "",
                 onStop = { viewModel.stopSession() }
             )
+        }
+
+        if (activeGoals.isNotEmpty()) {
+            item {
+                GoalsProgressCard(goals = activeGoals)
+            }
         }
 
         val lastAbandoned = switchEvents.lastOrNull { it.fromTodoId != null }?.fromTodoId
@@ -980,6 +990,72 @@ private fun JumpAttentionCard(
                     onClick = onResume
                 )
             }
+        }
+    }
+}
+
+/**
+ * Reporting goal progress back to the user is itself a proven lever on
+ * attainment (Harkin et al., 2015), so the active goals are shown as concrete
+ * progress bars rather than buried in a settings screen.
+ */
+@Composable
+private fun GoalsProgressCard(goals: List<GoalEntity>) {
+    SurfaceCard {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Flag,
+                contentDescription = null,
+                tint = ProductiveColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                "Goals",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        goals.take(3).forEach { goal ->
+            val fraction = goalProgress(goal.currentHours, goal.targetHours)
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = goal.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "${goal.currentHours.toInt()}/${goal.targetHours.toInt()}h",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth(),
+                color = ProductiveColor
+            )
+        }
+
+        if (goals.size > 3) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "+${goals.size - 3} more",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
