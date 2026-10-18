@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.8.0] - 2026-10-18
+
+### Added
+- **Park a thought.** While a focus session runs you can write down whatever
+  pulls at your attention and get straight back to work; parked thoughts appear
+  on Today so they are never lost. Writing an unfulfilled goal or intrusive
+  thought down releases the working memory it was holding, so attention returns
+  to the task at hand (Masicampo & Baumeister, 2011).
+
 ## [2.7.1] - 2026-10-18
 
 ### Added

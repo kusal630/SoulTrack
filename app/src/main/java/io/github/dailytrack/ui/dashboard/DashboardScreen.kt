@@ -38,6 +38,8 @@ import androidx.compose.material.icons.filled.AddTask
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
@@ -77,6 +79,7 @@ import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SessionEntity
 import io.github.dailytrack.data.db.entity.TodoEntity
 import io.github.dailytrack.data.db.entity.GoalEntity
+import io.github.dailytrack.data.db.entity.ParkedThoughtEntity
 import androidx.compose.foundation.BorderStroke
 import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.engine.SwitchReport
@@ -164,6 +167,7 @@ fun DashboardScreen(
     val focusGoalSeconds by viewModel.focusGoalSeconds.collectAsState()
     val goals by viewModel.goals.collectAsState()
     val activeGoals = remember(goals) { goals.filter { !it.isCompleted && !it.isArchived } }
+    val parkedThoughts by viewModel.parkedThoughts.collectAsState()
 
     // The ring is one number for one day: finished tasks and recorded focus
     // time both earn it. Nothing moves the ring that was not written down.
@@ -250,6 +254,16 @@ fun DashboardScreen(
         if (activeGoals.isNotEmpty()) {
             item {
                 GoalsProgressCard(goals = activeGoals)
+            }
+        }
+
+        if (parkedThoughts.isNotEmpty()) {
+            item {
+                ParkedThoughtsCard(
+                    thoughts = parkedThoughts,
+                    onResolve = { viewModel.resolveParkedThought(it) },
+                    onDelete = { viewModel.deleteParkedThought(it) }
+                )
             }
         }
 
@@ -1058,6 +1072,71 @@ private fun GoalsProgressCard(goals: List<GoalEntity>) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/**
+ * The parking lot for distractions: writing a thought down frees the working
+ * memory it was occupying (Masicampo & Baumeister, 2011), and surfacing the
+ * list keeps parked thoughts from being lost.
+ */
+@Composable
+private fun ParkedThoughtsCard(
+    thoughts: List<ParkedThoughtEntity>,
+    onResolve: (Long) -> Unit,
+    onDelete: (Long) -> Unit
+) {
+    SurfaceCard {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Lightbulb,
+                contentDescription = null,
+                tint = RecoveryColor,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                "Parked thoughts",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "You set these aside to stay focused. Deal with them or clear them.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        thoughts.take(4).forEach { thought ->
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = thought.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { onResolve(thought.id) }) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Mark handled",
+                        tint = ProductiveColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                IconButton(onClick = { onDelete(thought.id) }) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Delete thought",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }

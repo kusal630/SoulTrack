@@ -86,6 +86,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _reminders = MutableStateFlow<List<ReminderEntity>>(emptyList())
     val reminders: StateFlow<List<ReminderEntity>> = _reminders
 
+    private val _parkedThoughts = MutableStateFlow<List<ParkedThoughtEntity>>(emptyList())
+    val parkedThoughts: StateFlow<List<ParkedThoughtEntity>> = _parkedThoughts
+
     private val _achievements = MutableStateFlow<List<AchievementEntity>>(emptyList())
     val achievements: StateFlow<List<AchievementEntity>> = _achievements
 
@@ -310,6 +313,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             db.reminderDao().getAllReminders().collect { _reminders.value = it }
+        }
+
+        viewModelScope.launch {
+            db.parkedThoughtDao().getUnresolved().collect { _parkedThoughts.value = it }
         }
 
         viewModelScope.launch {
@@ -1918,6 +1925,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteGoal(goal: GoalEntity) {
         viewModelScope.launch { runCatching { goalRepo.deleteGoal(goal) } }
+    }
+
+    fun parkThought(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            runCatching { db.parkedThoughtDao().insert(ParkedThoughtEntity(text = trimmed)) }
+        }
+    }
+
+    fun resolveParkedThought(id: Long) {
+        viewModelScope.launch { runCatching { db.parkedThoughtDao().resolve(id) } }
+    }
+
+    fun deleteParkedThought(id: Long) {
+        viewModelScope.launch { runCatching { db.parkedThoughtDao().delete(id) } }
     }
 
     fun addReminder(title: String, message: String, type: String, hour: Int, minute: Int) {

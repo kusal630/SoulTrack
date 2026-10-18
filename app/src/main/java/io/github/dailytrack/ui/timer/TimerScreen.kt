@@ -98,6 +98,8 @@ fun TimerScreen(
     var showCategoryError by remember { mutableStateOf(false) }
     var showTitleError by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
+    var showParkDialog by remember { mutableStateOf(false) }
+    var parkedText by remember { mutableStateOf("") }
 
     val isRunning = activeSession != null
     val focusGoalSeconds by viewModel.focusGoalSeconds.collectAsState()
@@ -467,6 +469,17 @@ fun TimerScreen(
                         }
                     )
 
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    GhostCta(
+                        text = "Park a thought",
+                        icon = Icons.Default.Lightbulb,
+                        onClick = {
+                            parkedText = ""
+                            showParkDialog = true
+                        }
+                    )
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     SurfaceCard(
@@ -509,6 +522,45 @@ fun TimerScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showPermissionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showParkDialog) {
+        AlertDialog(
+            onDismissRequest = { showParkDialog = false },
+            title = { Text("Park a thought") },
+            text = {
+                Column {
+                    Text(
+                        text = "Write down the distraction so your mind can let it go, then get back to focus.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = parkedText,
+                        onValueChange = { parkedText = it },
+                        label = { Text("What pulled at you?") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.parkThought(parkedText)
+                        showParkDialog = false
+                    },
+                    enabled = parkedText.isNotBlank()
+                ) {
+                    Text("Park it")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showParkDialog = false }) {
                     Text("Cancel")
                 }
             }
