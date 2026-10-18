@@ -42,6 +42,13 @@ data class TodoEntity(
     val triggerText: String = "",
     /** Optional hour of day (0-23) to nudge the cue reminder; -1 = none. */
     val triggerHour: Int = -1,
+    /**
+     * Coping plan ("if I can't start, I'll ..."). Naming a fallback for the
+     * moment a plan meets friction is the part of implementation-intention
+     * research that keeps intentions alive under difficulty (Gollwitzer, 1999;
+     * Gollwitzer & Sheeran, 2006).
+     */
+    val obstacleText: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

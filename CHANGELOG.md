@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.8.1] - 2026-10-18
+
+### Added
+- **Coping plan on tasks.** Alongside the if-then cue you can name what you will
+  do when starting is hard ("If I can't start, I'll just do 2 minutes"). Naming
+  a fallback for the moment a plan meets friction is the part of
+  implementation-intention research that keeps intentions alive under
+  difficulty (Gollwitzer, 1999; Gollwitzer & Sheeran, 2006), and the cue
+  reminder now repeats it at the moment it matters.
+
 ## [2.8.0] - 2026-10-18
 
 ### Added

@@ -138,10 +138,15 @@ class DeadlineCheckWorker(
             sendNotification(
                 todoId = todo.id.toInt() + 40000,
                 title = "Time to start: ${todo.title}",
-                message = if (todo.triggerText.isNotBlank()) {
-                    "If ${todo.triggerText}, then this is your cue."
-                } else {
-                    "Your planned cue time has arrived."
+                message = buildString {
+                    if (todo.triggerText.isNotBlank()) {
+                        append("If ${todo.triggerText}, then this is your cue.")
+                    } else {
+                        append("Your planned cue time has arrived.")
+                    }
+                    if (todo.obstacleText.isNotBlank()) {
+                        append(" If it's hard to start, ${todo.obstacleText}.")
+                    }
                 },
                 priority = NotificationCompat.PRIORITY_DEFAULT
             )
