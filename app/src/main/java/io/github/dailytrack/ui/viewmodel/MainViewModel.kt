@@ -836,7 +836,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         priority: Int = 0,
         triggerText: String = "",
         triggerHour: Int = -1,
-        obstacleText: String = ""
+        obstacleText: String = "",
+        outcomeText: String = ""
     ) {
         viewModelScope.launch {
             val todo = TodoEntity(
@@ -848,7 +849,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 priority = priority,
                 triggerText = triggerText.trim(),
                 triggerHour = triggerHour,
-                obstacleText = obstacleText.trim()
+                obstacleText = obstacleText.trim(),
+                outcomeText = outcomeText.trim()
             )
             todoRepo.insert(todo)
         }

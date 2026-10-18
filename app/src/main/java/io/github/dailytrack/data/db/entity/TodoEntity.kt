@@ -49,6 +49,13 @@ data class TodoEntity(
      * Gollwitzer & Sheeran, 2006).
      */
     val obstacleText: String = "",
+    /**
+     * The best outcome if the task gets done - the "O" in WOOP / mental
+     * contrasting. Contrasting a desired outcome with the real obstacle is what
+     * turns a wish into a committed goal, and combined with the if-then plan it
+     * raises attainment (Wang et al., 2021, g = 0.34).
+     */
+    val outcomeText: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

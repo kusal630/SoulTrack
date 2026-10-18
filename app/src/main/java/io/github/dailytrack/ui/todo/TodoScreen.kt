@@ -410,8 +410,8 @@ fun TodoScreen(
         AddTodoDialog(
             categories = categories,
             onDismiss = { showAddDialog = false },
-            onAdd = { title, description, categoryId, deadline, estimatedMinutes, priority, triggerText, triggerHour, obstacleText ->
-                viewModel.addTodo(title, description, categoryId, deadline, estimatedMinutes, priority, triggerText, triggerHour, obstacleText)
+            onAdd = { title, description, categoryId, deadline, estimatedMinutes, priority, triggerText, triggerHour, obstacleText, outcomeText ->
+                viewModel.addTodo(title, description, categoryId, deadline, estimatedMinutes, priority, triggerText, triggerHour, obstacleText, outcomeText)
                 showAddDialog = false
             }
         )
@@ -751,6 +751,16 @@ fun TodoItemCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                if (todo.outcomeText.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Best case: ${todo.outcomeText}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
@@ -1068,7 +1078,7 @@ fun LogCompletedWorkDialog(
 fun AddTodoDialog(
     categories: Map<Long, io.github.dailytrack.data.db.entity.CategoryEntity>,
     onDismiss: () -> Unit,
-    onAdd: (String, String, Long?, Long?, Int, Int, String, Int, String) -> Unit
+    onAdd: (String, String, Long?, Long?, Int, Int, String, Int, String, String) -> Unit
 ) {
     val context = LocalContext.current
     var title by remember { mutableStateOf("") }
@@ -1080,6 +1090,7 @@ fun AddTodoDialog(
     var triggerCue by remember { mutableStateOf("") }
     var triggerHour by remember { mutableIntStateOf(-1) }
     var obstacleText by remember { mutableStateOf("") }
+    var outcomeText by remember { mutableStateOf("") }
     var showCategoryDropdown by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -1215,6 +1226,14 @@ fun AddTodoDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+                OutlinedTextField(
+                    value = outcomeText,
+                    onValueChange = { outcomeText = it },
+                    label = { Text("Best outcome if it gets done (optional)") },
+                    placeholder = { Text("e.g. I can relax this weekend") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
             }
         },
         confirmButton = {
@@ -1230,7 +1249,8 @@ fun AddTodoDialog(
                             priority,
                             triggerCue,
                             triggerHour,
-                            obstacleText
+                            obstacleText,
+                            outcomeText
                         )
                     }
                 },

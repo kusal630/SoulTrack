@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.9.0] - 2026-10-18
+
+### Added
+- **WOOP planning on tasks.** The task planner now covers the full mental
+  contrasting-with-implementation-intentions sequence: the wish (task), the best
+  outcome if it gets done, the obstacle, and the if-then plan. Contrasting a
+  desired outcome with the real obstacle is what turns a wish into a committed
+  goal, and combined with an if-then plan it raises goal attainment
+  (Wang et al., 2021, MCII meta-analysis, g = 0.34).
+
 ## [2.8.1] - 2026-10-18
 
 ### Added
