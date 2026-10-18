@@ -583,6 +583,7 @@ private fun FocusPermissionSection() {
     var autoDnd by remember { mutableStateOf(FocusSettings.isAutoDndEnabled(context)) }
     var noiseEnabled by remember { mutableStateOf(FocusSettings.isNoiseSensingEnabled(context)) }
     var recommendationsEnabled by remember { mutableStateOf(FocusSettings.isRecommendationsEnabled(context)) }
+    var budgetMinutes by remember { mutableIntStateOf(FocusSettings.getDistractionBudgetMinutes(context)) }
     var dndGranted by remember { mutableStateOf(FocusDndManager.hasAccess(context)) }
     var micGranted by remember { mutableStateOf(NoiseMonitor.hasPermission(context)) }
 
@@ -667,6 +668,42 @@ private fun FocusPermissionSection() {
             FocusSettings.setRecommendationsEnabled(context, enabled)
         }
     )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
+        Text(
+            text = "Distraction budget",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Sends one time check when distracting apps pass your daily budget. It never blocks anything - you decide whether to continue or step away. Needs Usage Access.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            listOf(0 to "Off", 60 to "1h", 90 to "1h 30m", 120 to "2h", 180 to "3h").forEach { (m, label) ->
+                FilterChip(
+                    selected = budgetMinutes == m,
+                    onClick = {
+                        budgetMinutes = m
+                        FocusSettings.setDistractionBudgetMinutes(context, m)
+                    },
+                    label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                )
+            }
+        }
+    }
 }
 
 @Composable

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.10.0] - 2026-10-18
+
+### Added
+- **Distraction budget with a just-in-time time check.** Set a daily budget for
+  apps the on-device classifier ranks as distracting; when you pass it, one
+  notification states the facts and leaves the choice open (continue or step
+  away). Nothing is blocked, because autonomy-supportive nudges avoid the
+  reactance that rigid blockers cause, and a similar prompt cut time on the most
+  problematic app by about 29 minutes a day in a randomized trial
+  (Keller et al., 2026, JMIR mHealth). Set it in Settings > Focus; it needs
+  Usage Access.
+
 ## [2.9.0] - 2026-10-18
 
 ### Added

@@ -25,6 +25,7 @@ object FocusSettings {
     private const val KEY_AUTO_DND = "auto_dnd_enabled"
     private const val KEY_NOISE = "noise_enabled"
     private const val KEY_RECOMMENDATIONS = "recommendations_enabled"
+    private const val KEY_DISTRACTION_BUDGET = "distraction_budget_minutes"
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -50,5 +51,18 @@ object FocusSettings {
 
     fun setRecommendationsEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_RECOMMENDATIONS, enabled).apply()
+    }
+
+    /**
+     * Daily budget, in minutes, for apps the on-device classifier ranks as
+     * distracting. 0 disables the budget. A self-set limit plus a just-in-time,
+     * autonomy-supportive prompt reduced time on the most problematic app by
+     * about 29 minutes a day in a randomized trial (Keller et al., 2026).
+     */
+    fun getDistractionBudgetMinutes(context: Context): Int =
+        prefs(context).getInt(KEY_DISTRACTION_BUDGET, 0)
+
+    fun setDistractionBudgetMinutes(context: Context, minutes: Int) {
+        prefs(context).edit().putInt(KEY_DISTRACTION_BUDGET, minutes.coerceIn(0, 600)).apply()
     }
 }

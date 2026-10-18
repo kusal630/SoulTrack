@@ -28,7 +28,16 @@ import androidx.work.*
 import io.github.dailytrack.MainActivity
 import io.github.dailytrack.SoulTrackApp
 import io.github.dailytrack.data.db.dao.TodoDao
+import io.github.dailytrack.service.FocusSettings
+import io.github.dailytrack.wellbeing.AndroidUsageCollector
+import io.github.dailytrack.wellbeing.AppUsage
+import io.github.dailytrack.wellbeing.SharedPreferencesClassifierStore
+import io.github.dailytrack.wellbeing.UsageAccess
+import io.github.dailytrack.wellbeing.UsageClassifier
+import io.github.dailytrack.wellbeing.UsageKind
 import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -115,7 +124,60 @@ class DeadlineCheckWorker(
 
         notifyImplementationIntentions(todoDao, now)
 
+        notifyDistractionBudget(now)
+
         return Result.success()
+    }
+
+    /**
+     * A single, autonomy-supportive time check when distracting apps pass a
+     * self-set daily budget. It states the facts and leaves the choice open
+     * (continue or stop) rather than blocking anything, which is what made a
+     * similar just-in-time nudge cut time on the most problematic app by about
+     * 29 minutes a day in a randomized trial (Keller et al., 2026).
+     */
+    private fun notifyDistractionBudget(now: Long) {
+        val budget = FocusSettings.getDistractionBudgetMinutes(applicationContext)
+        if (budget <= 0) return
+        if (!UsageAccess.has(applicationContext)) return
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        if (hour < 15) return
+        val zone = ZoneId.systemDefault()
+        val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(now))
+        val prefs = applicationContext.getSharedPreferences("soultrack_budget_prefs", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("nudged_$dateKey", false)) return
+
+        val dayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val wastedMinutes = runCatching { wastedMinutesToday(dayStart, now) }.getOrDefault(0)
+        if (wastedMinutes < budget) return
+
+        prefs.edit().putBoolean("nudged_$dateKey", true).apply()
+        createNotificationChannel()
+        sendNotification(
+            todoId = 880001,
+            title = "Time check: distracting apps",
+            message = "About ${wastedMinutes}m on distracting apps today against your ${budget}m budget. Keep going or step away?",
+            priority = NotificationCompat.PRIORITY_DEFAULT
+        )
+    }
+
+    private fun wastedMinutesToday(start: Long, end: Long): Int {
+        val intervals = AndroidUsageCollector.collect(applicationContext, start, end)
+        if (intervals.isEmpty()) return 0
+        val classifier = UsageClassifier(SharedPreferencesClassifierStore(applicationContext))
+        var wasted = 0L
+        for ((pkg, list) in intervals.groupBy { it.packageName }) {
+            val total = list.sumOf { it.millis }
+            val (label, category) = AndroidUsageCollector.describe(applicationContext, pkg)
+            val usage = AppUsage(
+                packageName = pkg,
+                label = label,
+                usageMillis = total,
+                platformCategory = category
+            )
+            if (classifier.classify(usage).kind == UsageKind.WASTED) wasted += total
+        }
+        return (wasted / 60_000L).toInt()
     }
 
     /**
