@@ -23,6 +23,7 @@ import io.github.dailytrack.data.db.AppDatabase
 import io.github.dailytrack.sync.SyncManager
 import io.github.dailytrack.sync.SyncRepository
 import io.github.dailytrack.worker.DeadlineCheckWorker
+import io.github.dailytrack.worker.WeeklyReviewWorker
 import io.github.dailytrack.service.TimerStateStore
 import io.github.dailytrack.widget.QuoteWidgetProvider
 import io.github.dailytrack.widget.TimerWidgetProvider
@@ -60,5 +61,6 @@ class SoulTrackApp : Application() {
             }
         }
         DeadlineCheckWorker.schedule(this)
+        WeeklyReviewWorker.schedule(this)
     }
 }

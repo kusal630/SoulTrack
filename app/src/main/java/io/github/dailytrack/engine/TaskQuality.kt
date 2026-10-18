@@ -74,6 +74,15 @@ object TaskQuality {
         return wordCount(title) < 2 || specificityOf(title) == 0
     }
 
+    /**
+     * True when a task is long enough that it is worth breaking into smaller,
+     * graded steps. "Graded tasks" is one of the behaviour-change techniques
+     * repeatedly associated with better outcomes in digital interventions
+     * (Singh et al., 2023 umbrella review), and smaller steps lower the
+     * activation cost of starting.
+     */
+    fun needsBreakdown(estimatedMinutes: Int): Boolean = estimatedMinutes >= 60
+
     private fun wordCount(title: String): Int =
         title.trim().split(' ', '\t', '\n').count { it.isNotBlank() }
 

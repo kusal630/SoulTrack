@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.7.1] - 2026-10-18
+
+### Added
+- **Weekly review digest.** Once a week (Sunday evening) a short, factual
+  summary of what you actually recorded is sent: tasks done, focused time and
+  active days. Reporting recorded progress back is the active ingredient of the
+  monitoring effect (Harkin et al., 2015, d+ = 0.40) and is listed among the
+  most effective components of digital behaviour-change interventions
+  (Singh et al., 2023, 85 reviews / 865k participants).
+- **Break long tasks into graded steps.** Tasks estimated at an hour or more now
+  prompt you to split them into smaller steps when you start, since graded tasks
+  are a proven behaviour-change technique and smaller steps lower the cost of
+  starting.
+
 ## [2.7.0] - 2026-10-18
 
 ### Added

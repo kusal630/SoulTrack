@@ -1126,6 +1126,13 @@ fun AddTodoDialog(
                     }
                 }
                 OutlinedTextField(value = estimatedMinutes, onValueChange = { estimatedMinutes = it }, label = { Text("Estimated minutes") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                if (TaskQuality.needsBreakdown(estimatedMinutes.toIntOrNull() ?: 0)) {
+                    Text(
+                        text = "Long task - break it into smaller steps when you get to it. Graded steps are easier to start and finish.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 OutlinedButton(
                     onClick = {
                         val cal = java.util.Calendar.getInstance()
