@@ -1,6 +1,7 @@
 package io.github.dailytrack.engine
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -189,6 +190,19 @@ class DayClassificationTest {
     fun `goal progress with no target is zero not nan`() {
         assertEquals(0f, goalProgress(5f, 0f), 1e-6f)
         assertTrue(!goalProgress(5f, 0f).isNaN())
+    }
+
+    @Test
+    fun `goal gradient message highlights a small number of remaining tasks`() {
+        assertTrue(goalGradientMessage(2, 3)!!.contains("1 left"))
+        assertTrue(goalGradientMessage(4, 6)!!.contains("Only 2"))
+        assertTrue(goalGradientMessage(3, 3)!!.contains("All done"))
+    }
+
+    @Test
+    fun `goal gradient message is null when there is nothing useful to say`() {
+        assertNull(goalGradientMessage(0, 0))
+        assertNull(goalGradientMessage(1, 8))
     }
 
     @Test

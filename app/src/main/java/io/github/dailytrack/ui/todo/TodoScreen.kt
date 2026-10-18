@@ -43,6 +43,7 @@ import androidx.navigation.NavController
 import io.github.dailytrack.data.db.entity.SubtaskEntity
 import io.github.dailytrack.data.db.entity.TodoEntity
 import io.github.dailytrack.engine.DayStatus
+import io.github.dailytrack.engine.TaskQuality
 import io.github.dailytrack.ui.components.*
 import io.github.dailytrack.ui.components.dayProgressFor
 import io.github.dailytrack.ui.theme.Dimens
@@ -709,6 +710,13 @@ fun TodoItemCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                TaskQuality.calibrationNote(todo.estimatedMinutes, todo.actualMinutes)?.let { note ->
+                    Text(
+                        text = note,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (todo.triggerText.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1069,6 +1077,13 @@ fun AddTodoDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                if (TaskQuality.isVague(title)) {
+                    Text(
+                        text = "Name the action and the thing: specific tasks get done far more often than vague ones.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
                 Text("Priority *", style = MaterialTheme.typography.labelMedium)

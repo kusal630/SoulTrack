@@ -192,6 +192,25 @@ fun todayProgressLabel(completed: Int, assigned: Int): String = when {
 }
 
 /**
+ * A motivating subtitle that leans on the goal-gradient effect: effort and
+ * persistence rise as people see themselves nearing a goal, so a small number
+ * of remaining tasks is worth stating plainly (Nunes & Dreze, 2006; Kivetz et
+ * al., 2006). Returns null when there is nothing useful to add, so callers can
+ * fall back to the plain count.
+ */
+fun goalGradientMessage(completed: Int, assigned: Int): String? {
+    if (assigned <= 0) return null
+    val remaining = assigned - completed
+    return when {
+        remaining <= 0 -> "All done for today - well played."
+        remaining == 1 && completed > 0 -> "Just 1 left - finish strong."
+        remaining <= 3 && completed > 0 -> "Only $remaining left."
+        completed == 0 -> "Start with the first one."
+        else -> null
+    }
+}
+
+/**
  * TalkBack sentence for a whole week, e.g.
  * "Week: Monday all tasks done, Tuesday tasks not met, Wednesday in progress."
  */

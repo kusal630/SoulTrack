@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.7.0] - 2026-10-18
+
+### Added
+- **Specificity nudge when adding a task.** Vague titles ("stuff", "email")
+  prompt you to name the action and the object. Specific, moderately difficult
+  goals are followed through far more often than vague ones (Locke & Latham,
+  2002).
+- **Estimate calibration feedback.** A completed task now tells you when it took
+  much longer or much less time than planned, because the planning fallacy is
+  systematic and only visible once you compare estimate to reality
+  (Kahneman & Tversky, 1979; Buehler et al., 1994).
+- **Goal-gradient progress framing.** When you are close to finishing the day's
+  tasks the count is phrased to make the finish line salient ("Only 2 left",
+  "Just 1 left - finish strong"), which raises effort near a goal
+  (Nunes & Dreze, 2006; Kivetz et al., 2006).
+
 ## [2.6.1] - 2026-10-17
 
 ### Added

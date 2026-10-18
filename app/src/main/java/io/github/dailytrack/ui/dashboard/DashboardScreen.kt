@@ -82,6 +82,7 @@ import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.engine.SwitchReport
 import io.github.dailytrack.engine.dayProgress
 import io.github.dailytrack.engine.focusProgress
+import io.github.dailytrack.engine.goalGradientMessage
 import io.github.dailytrack.engine.goalProgress
 import io.github.dailytrack.engine.recordedDayProgress
 import io.github.dailytrack.engine.todayProgressLabel
@@ -298,7 +299,8 @@ fun DashboardScreen(
                 subtitle = if (assignedCount == 0) {
                     "Assigning a task starts the day ring"
                 } else {
-                    "$completedCount of $assignedCount done"
+                    goalGradientMessage(completedCount, assignedCount)
+                        ?: "$completedCount of $assignedCount done"
                 },
                 trailing = {
                     if (activeTodos.isNotEmpty()) {
