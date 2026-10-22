@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.12.0] - 2026-10-22
+
+### Changed
+- **Simplified navigation to four destinations:** Today, Focus, Tasks and
+  Insights. Timer and Pomodoro no longer compete as separate tabs; Focus owns
+  the focus flow and links to the manual timer.
+- **Today is now a single-screen decision:** ring, live tracker, one focus
+  action, and today's top three tasks. Goals, parked thoughts, jump alerts,
+  comfort-zone cards, pie charts, recent sessions and insight lists were
+  removed from the home surface.
+- **Insights now shows only what changes behaviour:** growth score, this week's
+  seven status bars, and one active suggestion. The remaining chart cards and
+  the weekly report entry point were removed.
+- **Tasks lost the progress overview, filter chips and sort menu.** The list is
+  always priority-sorted, with quick add and the daily planner remaining in the
+  header.
+- **Secondary tools moved to More:** habits, history, reminders and saved
+  quotes are available from Settings > More instead of a large Explore catalog.
+
+### Removed
+- Duplicate Focus mode screen.
+- Weekly report screen and its Insights entry point.
+- Pre-mortem projects, learning loop, compounding tracker, guided weekly
+  review and achievements screens.
+- Dense focus-data cards, switch-cost charts and category pie charts.
+
 ## [2.11.0] - 2026-10-22
 
 ### Added

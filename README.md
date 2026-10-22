@@ -19,35 +19,42 @@ aqua → sky gradient and Manrope typography. See [RESEARCH/DESIGN.md](RESEARCH/
 
 ## Features
 
-- **Time Tracking**: Active timer with foreground service, manual logging, session management
-- **Productivity Analysis**: Track productive, wasted, neutral, learning, and exercise time
-- **Growth Score**: Transparent daily score from weighted components
-- **Routine Loop Detection**: Detect repetitive patterns using cosine similarity
-- **Insights Center**: Personalized warnings and suggestions
-- **Our own targets and calibration**: set productive/learning minutes in Settings, or let the app calibrate from your trailing fortnight
-- **Export/Import**: JSON and CSV backup/restore
+- **Today**: one day ring, a live tracking chip, one primary focus action, and
+  the three tasks that matter today.
+- **Focus**: work/break cycles, a start ritual, break coach, optional Do Not
+  Disturb, and one-tap access to the manual timer for work you forgot to track.
+- **Tasks**: a clean priority-sorted list, optional daily planner, quick add,
+  and logging for work already done.
+- **Insights**: a daily growth score, this week's seven status bars, and one
+  active suggestion. No chart wall.
+- **More**: habits, history, reminders and saved quotes live here, out of the
+  daily path.
+- **Time tracking**: active timer with foreground service, manual logging and
+  session history.
+- **Day classification**: every day ends as Done / Tasks not met / Not
+  productive / Wasting time, with thresholds you can tune in Settings.
 - **Private device sync**: pair a phone and tablet with a QR code and sync
   directly over your LAN or VPN, with authenticated AES-GCM encryption and no
-  cloud account. Categories, todos, subtasks and completed sessions/pomodoros
-  are synchronized
-- **Settings**: Profile, targets, privacy controls
-- **Soul Rings**: inner ring = today's tasks, outer ring = 7 day statuses
-- **Day Classification**: every day ends as Done / Tasks not met / Not
-  productive / Wasting time, with thresholds you can tune in Settings
+  cloud account.
+- **Settings**: targets, focus guardrails, privacy controls and themes.
+- **Soul Rings**: inner ring = today's tasks, outer ring = 7 day statuses.
 - **Themes**: AMOLED black, soft dark, light, system, plus dynamic colour on
-  Android 12+
-- **Focus sessions**: aqua work ring, sky break ring, keep-screen-on, optional
-  Do Not Disturb
-- **Task switch detection**: when a session jumps to another task within five
-  minutes, the jump is counted, the dropped task stays in view, and Insights
-  shows the resumption delay plus focus after a jump vs the rest of the day
-  (the "hallucination" index, 0-100)
-- **Intelligent task recommendation**: the Dashboard picks the next task from
-  your own history, the current focus level, mood and energy — and always
-  prefers the task already in flight over starting a new context
-- **Your own targets**: productive/learning/exercise minutes, sleep hours,
-  water and pomodoro goals are set in Settings, and anything you leave empty
-  is calibrated from your own trailing fortnight
+  Android 12+.
+
+## A calmer surface
+
+The app intentionally keeps just four destinations: **Today, Focus, Tasks and
+Insights**. Research on feature overload and dashboard attention led to three
+rules:
+
+1. **One primary action per screen.** Today asks you to start or continue a
+   focus block; everything else is secondary.
+2. **Progressive disclosure.** Habits, history, reminders and quotes sit under
+   More, while advanced planner and guardrail settings stay in Settings.
+3. **Few, high-signal numbers.** Insights shows a score, a week pattern and one
+   suggestion instead of a wall of overlapping charts.
+
+The result is a shorter path from opening the app to starting meaningful work.
 
 ### Planned
 - **Persistent Task Reminders**: an ongoing notification that keeps your due
