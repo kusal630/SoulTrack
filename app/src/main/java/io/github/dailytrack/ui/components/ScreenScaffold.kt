@@ -26,9 +26,11 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
@@ -105,20 +107,32 @@ fun ScreenScaffold(
     Scaffold(
         modifier = modifier,
         topBar = {
-            if (compact) {
-                CompactBar(
-                    titleText = titleText,
-                    backAction = backAction,
-                    containerColor = topBarContainerColor,
-                    actions = actions
-                )
-            } else {
-                LargeBar(
-                    titleText = titleText,
-                    backAction = backAction,
-                    containerColor = topBarContainerColor,
-                    actions = actions
-                )
+            // Keep the header on the same 720dp column as the content so a
+            // tablet or unfolded phone does not look like two unrelated
+            // layouts stacked on top of each other.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Box(modifier = Modifier.widthIn(max = Dimens.ContentMaxWidth)) {
+                    if (compact) {
+                        CompactBar(
+                            titleText = titleText,
+                            backAction = backAction,
+                            containerColor = topBarContainerColor,
+                            actions = actions
+                        )
+                    } else {
+                        LargeBar(
+                            titleText = titleText,
+                            backAction = backAction,
+                            containerColor = topBarContainerColor,
+                            actions = actions
+                        )
+                    }
+                }
             }
         },
         bottomBar = bottomBar,

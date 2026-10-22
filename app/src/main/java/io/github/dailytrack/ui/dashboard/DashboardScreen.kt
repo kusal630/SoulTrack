@@ -38,6 +38,9 @@ import androidx.compose.material.icons.filled.AddTask
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Warning
@@ -72,6 +75,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -217,10 +221,10 @@ fun DashboardScreen(
         subtitle = today.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
         actions = {
             IconButton(onClick = { navController.navigateSingleTop(Screen.Explore.route) }) {
-                Icon(Icons.Default.Explore, contentDescription = "Explore")
+                Icon(Icons.Outlined.Explore, contentDescription = "Explore")
             }
             IconButton(onClick = { navController.navigateSingleTop(Screen.Habits.route) }) {
-                Icon(Icons.Default.Flag, contentDescription = "Habits")
+                Icon(Icons.Default.Checklist, contentDescription = "Habits")
             }
             IconButton(onClick = { navController.navigateSingleTop(Screen.Settings.route) }) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -309,12 +313,12 @@ fun DashboardScreen(
 
         item {
             SectionTitle(
-                title = "Tasks for today",
+                title = "Open tasks",
                 subtitle = if (assignedCount == 0) {
-                    "Assigning a task starts the day ring"
+                    "Assign one to today to start the day ring"
                 } else {
                     goalGradientMessage(completedCount, assignedCount)
-                        ?: "$completedCount of $assignedCount done"
+                        ?: "$completedCount of $assignedCount done today"
                 },
                 trailing = {
                     if (activeTodos.isNotEmpty()) {
@@ -503,29 +507,25 @@ private fun TodayHero(
             Hairline()
             Spacer(modifier = Modifier.height(Dimens.CardGap))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                WeekLabel("Mon", "Tue")
-                WeekLabel("Wed", "Thu")
-                WeekLabel("Fri", "Sat")
-                WeekLabel("Sun", "")
+            Row(modifier = Modifier.fillMaxWidth()) {
+                WeekDayShortNames.forEachIndexed { index, name ->
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (index == todayIndex) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (index == todayIndex) FontWeight.SemiBold else FontWeight.Normal,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             StatusLegendRow(tint = statusTint, status = status)
         }
-    }
-}
-
-@Composable
-private fun WeekLabel(a: String, b: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = if (b.isEmpty()) a else "$a · $b",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
@@ -670,17 +670,21 @@ private fun TrackerChip(
                     .background(MaterialTheme.colorScheme.primary)
             )
             Spacer(modifier = Modifier.width(10.dp))
+            val chipTitle = activeSession.title.ifBlank {
+                categoryName.ifBlank { "Tracking" }
+            }
+            val chipSubtitle = categoryName.takeIf { it.isNotBlank() && it != chipTitle }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = activeSession.title.ifBlank { "Tracking" },
+                    text = chipTitle,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (categoryName.isNotBlank()) {
+                if (chipSubtitle != null) {
                     Text(
-                        text = categoryName,
+                        text = chipSubtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -718,7 +722,7 @@ private fun TodayTaskRow(todo: TodoEntity, onToggle: () -> Unit) {
                 modifier = Modifier.size(Dimens.MinTouchTarget)
             ) {
                 Icon(
-                    Icons.Default.CheckCircle,
+                    Icons.Outlined.RadioButtonUnchecked,
                     contentDescription = "Complete ${todo.title}",
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
                 )

@@ -43,11 +43,11 @@ object AppFeatures {
      * Defaults to on so an existing install never loses its screens; the
      * onboarding question sets it explicitly for new users.
      */
-    var healthEnabled by mutableStateOf(true)
+    var healthEnabled by mutableStateOf(false)
         private set
 
     fun load(context: Context) {
-        healthEnabled = prefs(context).getBoolean(KEY_HEALTH, true)
+        healthEnabled = prefs(context).getBoolean(KEY_HEALTH, false)
     }
 
     fun setHealthEnabled(value: Boolean, context: Context) {

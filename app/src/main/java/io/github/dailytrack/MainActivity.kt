@@ -17,14 +17,11 @@
 
 package io.github.dailytrack
 
-import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.background
@@ -43,7 +40,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import io.github.dailytrack.engine.DayStatus
 import io.github.dailytrack.ui.DailyTrackNavHost
@@ -58,10 +54,6 @@ import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { _ -> }
-
     private var showOnboarding by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,8 +67,6 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             enableEdgeToEdge()
         }
-
-        requestNotificationPermission()
 
         val prefs = getSharedPreferences("soultrack_prefs", MODE_PRIVATE)
         showOnboarding = !prefs.getBoolean("onboarding_complete", false)
@@ -113,18 +103,6 @@ class MainActivity : ComponentActivity() {
         QuoteWidgetProvider.updateWidgets(this)
     }
 
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val hasPermission = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-
-            if (!hasPermission) {
-                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-    }
 }
 
 /**
@@ -139,14 +117,14 @@ fun SplashScreen(onSplashComplete: () -> Unit) {
     var progress by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         if (reduceMotion) {
-            progress = 0.25f
-            delay(600)
-        } else {
-            delay(120)
-            progress = 0.25f
-            delay(1000)
             progress = 0.62f
-            delay(500)
+            delay(260)
+        } else {
+            delay(60)
+            progress = 0.25f
+            delay(460)
+            progress = 0.62f
+            delay(220)
         }
         onSplashComplete()
     }

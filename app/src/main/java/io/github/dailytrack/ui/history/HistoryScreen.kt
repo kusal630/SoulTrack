@@ -106,7 +106,8 @@ fun HistoryScreen(
     ScreenList(
         title = "History",
         subtitle = "One mark per day, on the week ring",
-        navController = navController
+        navController = navController,
+        compact = true
     ) {
         item {
             SurfaceCard(modifier = Modifier.padding(top = 8.dp)) {

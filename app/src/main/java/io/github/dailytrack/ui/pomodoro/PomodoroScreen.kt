@@ -203,21 +203,108 @@ fun PomodoroScreen(
         label = "progress"
     )
 
+    val beginSession: () -> Unit = start@{
+        val selectedTodo = activeTodos.find { it.id == selectedTodoId }
+        if (selectedTodo != null && selectedTodo.priority < 3) {
+            val higherPending = activeTodos.filter {
+                it.priority > selectedTodo.priority && it.id != selectedTodo.id
+            }
+            if (higherPending.isNotEmpty()) {
+                pendingPomodoroTodo = selectedTodo
+                pendingWorkDuration = selectedWorkDuration
+                showPriorityWarning = true
+                return@start
+            }
+        }
+
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        val todoTitle = activeTodos.find { it.id == selectedTodoId }?.title ?: ""
+        viewModel.startPomodoro(
+            todoId = if (selectedTodoId > 0) selectedTodoId else null,
+            categoryId = if (selectedCategoryId > 0) selectedCategoryId else null,
+            durationMinutes = selectedWorkDuration,
+            title = todoTitle,
+            breakDurationMinutes = selectedBreakDuration
+        )
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Pomodoro Timer") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateToHome() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { navController.navigateSingleTop(Screen.SavedQuotes.route) }) {
-                        Icon(Icons.Default.Favorite, contentDescription = "Saved Quotes")
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Box(modifier = Modifier.widthIn(max = Dimens.ContentMaxWidth)) {
+                    TopAppBar(
+                        title = { Text("Pomodoro Timer") },
+                        navigationIcon = {
+                            IconButton(onClick = { navController.navigateToHome() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { navController.navigateSingleTop(Screen.SavedQuotes.route) }) {
+                                Icon(Icons.Default.Favorite, contentDescription = "Saved Quotes")
+                            }
+                        }
+                    )
+                }
+            }
+        },
+        bottomBar = {
+            // Pinned action: the whole point of a pomodoro is starting one
+            // without scrolling past a quote and five settings rows.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .widthIn(max = Dimens.ContentMaxWidth)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                ) {
+                    if (!isRunning) {
+                        Button(
+                            onClick = beginSession,
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(50),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = WorkColor,
+                                contentColor = OnMint
+                            )
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Start ${selectedWorkDuration} min focus", fontSize = 16.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.stopPomodoro()
+                            },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(50),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                if (isBreak) "Skip break" else "End session",
+                                fontSize = 16.sp
+                            )
+                        }
                     }
                 }
-            )
+            }
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
@@ -240,9 +327,11 @@ fun PomodoroScreen(
 
             LazyColumn(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = Dimens.ContentMaxWidth)
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(24.dp),
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -259,12 +348,12 @@ fun PomodoroScreen(
                         if (isRunning) {
                             Canvas(
                                 modifier = Modifier
-                                    .size(260.dp)
+                                    .requiredSize(340.dp)
                                     .blur(20.dp)
                             ) {
                                 drawCircle(
                                     color = animatedActiveColor.copy(alpha = 0.3f),
-                                    radius = size.minDimension / 2
+                                    radius = 120.dp.toPx()
                                 )
                             }
                         }
@@ -329,69 +418,6 @@ fun PomodoroScreen(
                     }
                 }
 
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = animatedActiveColor.copy(alpha = 0.06f)
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            val isSaved by remember(currentQuote, savedQuotes) {
-                                derivedStateOf { savedQuotes.any { it.text == currentQuote } }
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        if (isSaved) {
-                                            val savedQuote = savedQuotes.find { it.text == currentQuote }
-                                            savedQuote?.let { viewModel.deleteSavedQuote(it) }
-                                        } else {
-                                            viewModel.saveQuote(currentQuote, quoteAuthor)
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = if (isSaved) "Unsave" else "Save",
-                                        tint = if (isSaved) MaterialTheme.colorScheme.primary else animatedActiveColor
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "\u201C",
-                                style = MaterialTheme.typography.headlineLarge,
-                                color = animatedActiveColor.copy(alpha = 0.4f),
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = currentQuote,
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.Medium
-                            )
-                            if (quoteAuthor.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "\u2014 $quoteAuthor",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-
                 if (!isRunning) {
                     item {
                         Text(
@@ -436,7 +462,71 @@ fun PomodoroScreen(
                             }
                         }
                     }
+                }
 
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = animatedActiveColor.copy(alpha = 0.06f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        val isSaved by remember(currentQuote, savedQuotes) {
+                            derivedStateOf { savedQuotes.any { it.text == currentQuote } }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.FormatQuote,
+                                contentDescription = null,
+                                tint = animatedActiveColor.copy(alpha = 0.5f),
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = currentQuote,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 3,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                if (quoteAuthor.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "\u2014 $quoteAuthor",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (isSaved) {
+                                        val savedQuote = savedQuotes.find { it.text == currentQuote }
+                                        savedQuote?.let { viewModel.deleteSavedQuote(it) }
+                                    } else {
+                                        viewModel.saveQuote(currentQuote, quoteAuthor)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = if (isSaved) "Unsave" else "Save",
+                                    tint = if (isSaved) MaterialTheme.colorScheme.primary else animatedActiveColor
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (!isRunning) {
                     item {
                         Text(
                             "Link to Todo (optional)",
@@ -535,65 +625,6 @@ fun PomodoroScreen(
                         }
                     }
 
-                    item {
-                        Button(
-                            onClick = {
-                                val selectedTodo = activeTodos.find { it.id == selectedTodoId }
-                                if (selectedTodo != null && selectedTodo.priority < 3) {
-                                    val higherPending = activeTodos.filter {
-                                        it.priority > selectedTodo.priority && it.id != selectedTodo.id
-                                    }
-                                    if (higherPending.isNotEmpty()) {
-                                        pendingPomodoroTodo = selectedTodo
-                                        pendingWorkDuration = selectedWorkDuration
-                                        showPriorityWarning = true
-                                        return@Button
-                                    }
-                                }
-
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
-                                val todoTitle = activeTodos.find { it.id == selectedTodoId }?.title ?: ""
-                                viewModel.startPomodoro(
-                                    todoId = if (selectedTodoId > 0) selectedTodoId else null,
-                                    categoryId = if (selectedCategoryId > 0) selectedCategoryId else null,
-                                    durationMinutes = selectedWorkDuration,
-                                    title = todoTitle,
-                                    breakDurationMinutes = selectedBreakDuration
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(50),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = WorkColor,
-                                contentColor = OnMint
-                            )
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Start Focus Session", fontSize = 16.sp)
-                        }
-                    }
-                } else {
-                    item {
-                        Button(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.stopPomodoro()
-                            },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                if (isBreak) "Skip Break" else "End Session",
-                                fontSize = 16.sp
-                            )
-                        }
-                    }
                 }
 
                 val workSessions = todayPomodoros.filter { it.type == "WORK" }

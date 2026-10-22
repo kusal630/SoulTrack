@@ -70,7 +70,8 @@ import io.github.dailytrack.ui.theme.ProductiveColor
 @Composable
 fun GamificationScreen(
     userStats: UserStatsEntity?,
-    achievements: List<AchievementEntity>
+    achievements: List<AchievementEntity>,
+    onBack: (() -> Unit)? = null
 ) {
     val level = userStats?.level ?: 1
     val xp = userStats?.totalXp ?: 0L
@@ -79,7 +80,8 @@ fun GamificationScreen(
     ScreenList(
         title = "Achievements",
         subtitle = "Your level, XP and milestones",
-        onBack = null
+        onBack = onBack,
+        compact = true
     ) {
         item {
             LevelHeroCard(level = level, xp = xp)

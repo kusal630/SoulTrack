@@ -109,6 +109,7 @@ fun TodoScreen(
 
     ScreenList(
         title = "Tasks",
+        subtitle = "What deserves your attention",
         onBack = { navController.navigateToHome() },
         actions = {
             Box {
@@ -242,10 +243,8 @@ fun TodoScreen(
                     EmptyState(
                         title = "No tasks yet",
                         message = "Every task you finish and every minute you track feeds the day ring. " +
-                            "Add one, start a timer, or write down work you already did.",
-                        icon = Icons.Default.CheckCircle,
-                        actionLabel = "Add task",
-                        onAction = { showAddDialog = true }
+                            "Add one below, start a timer, or write down work you already did.",
+                        icon = Icons.Default.CheckCircle
                     )
                 }
             }

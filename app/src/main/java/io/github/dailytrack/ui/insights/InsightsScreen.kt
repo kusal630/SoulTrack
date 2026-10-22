@@ -315,7 +315,7 @@ fun ScoreBreakdown(label: String, score: Double, color: Color) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.width(70.dp),
+            modifier = Modifier.width(88.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         LinearProgressIndicator(
@@ -950,14 +950,23 @@ fun WeekStatusBarsCard(
                 }
             }
             Spacer(modifier = Modifier.height(14.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                StatusLegendItem(DayStatus.DONE, modifier = Modifier.weight(1f))
-                StatusLegendItem(DayStatus.TASKS_NOT_MET, modifier = Modifier.weight(1f))
-                StatusLegendItem(DayStatus.NOT_PRODUCTIVE, modifier = Modifier.weight(1f))
-                StatusLegendItem(DayStatus.WASTING_TIME, modifier = Modifier.weight(1f))
+            // Four statuses need two rows on a phone; giving each label half
+            // the width stops "Tasks not met" from truncating to "Tasks not".
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatusLegendItem(DayStatus.DONE, modifier = Modifier.weight(1f))
+                    StatusLegendItem(DayStatus.TASKS_NOT_MET, modifier = Modifier.weight(1f))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatusLegendItem(DayStatus.NOT_PRODUCTIVE, modifier = Modifier.weight(1f))
+                    StatusLegendItem(DayStatus.WASTING_TIME, modifier = Modifier.weight(1f))
+                }
             }
         }
     }

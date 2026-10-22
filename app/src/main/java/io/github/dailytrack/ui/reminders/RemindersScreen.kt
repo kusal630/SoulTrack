@@ -75,7 +75,8 @@ fun RemindersScreen(
     reminders: List<ReminderEntity>,
     onAddReminder: (String, String, String, Int, Int) -> Unit,
     onToggleReminder: (Long, Boolean) -> Unit,
-    onDeleteReminder: (ReminderEntity) -> Unit
+    onDeleteReminder: (ReminderEntity) -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var newTitle by remember { mutableStateOf("") }
@@ -90,7 +91,8 @@ fun RemindersScreen(
     ScreenList(
         title = "Reminders",
         subtitle = "Time, habit and streak nudges",
-        onBack = null
+        onBack = onBack,
+        compact = true
     ) {
         if (reminders.isEmpty()) {
             item {

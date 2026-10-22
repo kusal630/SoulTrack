@@ -22,6 +22,7 @@ import io.github.dailytrack.engine.DayClassificationThresholds
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -218,6 +219,31 @@ private val LightColorScheme = lightColorScheme(
     surfaceTint = Color(0xFF0E9B73)
 )
 
+/**
+ * Dynamic colour, without giving up the AMOLED canvas.
+ *
+ * Material's dynamic scheme also replaces the near-black surface ladder with
+ * wallpaper-tinted greys. On OLED that wastes power and breaks the ring
+ * identity, so we take only the accent slots from the wallpaper and keep our
+ * own black surfaces, text and semantic colours.
+ */
+private fun dynamicAccents(base: ColorScheme, dynamic: ColorScheme): ColorScheme = base.copy(
+    primary = dynamic.primary,
+    onPrimary = dynamic.onPrimary,
+    primaryContainer = dynamic.primaryContainer,
+    onPrimaryContainer = dynamic.onPrimaryContainer,
+    secondary = dynamic.secondary,
+    onSecondary = dynamic.onSecondary,
+    secondaryContainer = dynamic.secondaryContainer,
+    onSecondaryContainer = dynamic.onSecondaryContainer,
+    tertiary = dynamic.tertiary,
+    onTertiary = dynamic.onTertiary,
+    tertiaryContainer = dynamic.tertiaryContainer,
+    onTertiaryContainer = dynamic.onTertiaryContainer,
+    inversePrimary = dynamic.inversePrimary,
+    surfaceTint = dynamic.primary
+)
+
 @Composable
 fun SoulTrackTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -231,14 +257,17 @@ fun SoulTrackTheme(
         else -> true
     }
 
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (useDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
+    val baseScheme = when {
         !useDark -> LightColorScheme
         chosen == ThemeMode.SOFT_DARK -> SoftDarkColorScheme
         else -> AmoledColorScheme
+    }
+    val colorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val context = LocalContext.current
+        val dynamic = if (useDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        dynamicAccents(baseScheme, dynamic)
+    } else {
+        baseScheme
     }
 
     CompositionLocalProvider(LocalDayStatusColors provides DayStatusPalette()) {
