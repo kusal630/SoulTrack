@@ -23,13 +23,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -57,52 +58,32 @@ private data class Destination(
     val tint: Color
 )
 
-private val mindDestinations = listOf(
-    Destination("Daily planner", "Important work first", Icons.Default.EventNote, Screen.Planner.route, Color(0xFF10B981)),
-    Destination("Projects", "Pre-mortem the risks", Icons.Default.ReportProblem, Screen.Projects.route, Color(0xFFF97316)),
-    Destination("Learning loop", "Recall, compare, explain", Icons.Default.School, Screen.LearningLoop.route, Color(0xFF8B5CF6)),
-    Destination("Weekly review", "Five questions, five minutes", Icons.Default.FactCheck, Screen.WeeklyReview.route, Color(0xFF14B8A6)),
-    Destination("Focus mode", "Block distractions", Icons.Default.CenterFocusStrong, Screen.FocusMode.route, Color(0xFF10B981)),
-    Destination("Saved quotes", "Words that keep you going", Icons.Default.FormatQuote, Screen.SavedQuotes.route, Color(0xFF60A5FA)),
-    Destination("Targets", "Your goals and features", Icons.Default.Flag, Screen.Settings.route, Color(0xFFA78BFA)),
-    Destination("Reminders", "Time and habit nudges", Icons.Default.Alarm, Screen.Reminders.route, Color(0xFFFBBF24))
-)
-
-private val progressDestinations = listOf(
-    Destination("Compounding", "Your 1% curves", Icons.Default.TrendingUp, Screen.Compounding.route, Color(0xFF22C55E)),
+private val secondaryDestinations = listOf(
+    Destination("Habits", "Daily routines", Icons.Default.Flag, Screen.Habits.route, Color(0xFF10B981)),
     Destination("History", "Every session logged", Icons.Default.History, Screen.History.route, Color(0xFF94A3B8)),
-    Destination("Home", "Today's ring and time", Icons.Default.Home, Screen.Dashboard.route, Color(0xFF2DD4BF)),
-    Destination("Weekly report", "Your seven-day recap", Icons.Default.Assessment, Screen.WeeklyReport.route, Color(0xFF38BDF8)),
-    Destination("Achievements", "Levels and unlocks", Icons.Default.EmojiEvents, Screen.Achievements.route, Color(0xFFFACC15))
+    Destination("Reminders", "Time and habit nudges", Icons.Default.Alarm, Screen.Reminders.route, Color(0xFFFBBF24)),
+    Destination("Saved quotes", "Words that keep you going", Icons.Default.FormatQuote, Screen.SavedQuotes.route, Color(0xFF60A5FA))
 )
 
 /**
- * The hub that makes every secondary feature reachable. Without this a good
- * half of the app is dead code the user can never open.
+ * Secondary tools, deliberately kept off the main navigation. If a tool is
+ * not used every day it should not compete with Today, Focus and Tasks.
  */
 @Composable
 fun ExploreScreen(navController: NavController) {
     ScreenList(
-        title = "Explore",
-        subtitle = "Everything else Soul Track tracks",
+        title = "More",
+        subtitle = "Secondary tools",
         navController = navController,
         compact = true
     ) {
         item {
             SectionTitle(
-                title = "Mind & habits",
-                subtitle = "Plan, reflect and stay on track"
+                title = "Optional",
+                subtitle = "Everything here is one tap away, never in the way"
             )
         }
-        item { DestinationGrid(mindDestinations, navController) }
-        item {
-            SectionTitle(
-                title = "Progress",
-                subtitle = "Look back at what you actually did",
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-        item { DestinationGrid(progressDestinations, navController) }
+        item { DestinationGrid(secondaryDestinations, navController) }
         item { Spacer(modifier = Modifier.height(8.dp)) }
     }
 }

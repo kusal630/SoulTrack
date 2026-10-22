@@ -54,10 +54,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import io.github.dailytrack.data.api.QuotesApi
 import io.github.dailytrack.data.db.entity.TodoEntity
 import io.github.dailytrack.ui.components.*
-import io.github.dailytrack.ui.navigateToHome
 import io.github.dailytrack.ui.navigateSingleTop
 import io.github.dailytrack.ui.Screen
 import io.github.dailytrack.ui.components.SurfaceCard
@@ -94,7 +92,6 @@ fun PomodoroScreen(
     val todayPomodoros by viewModel.todayPomodoros.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val activeTodos by viewModel.activeTodos.collectAsState()
-    val savedQuotes by viewModel.savedQuotes.collectAsState()
     
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
     var selectedWorkDuration by remember { mutableIntStateOf(25) }
@@ -102,9 +99,6 @@ fun PomodoroScreen(
     var selectedTodoId by remember { mutableLongStateOf(0L) }
     var selectedCategoryId by remember { mutableLongStateOf(0L) }
     
-    var currentQuote by remember { mutableStateOf("Loading inspiring quote...") }
-    var quoteAuthor by remember { mutableStateOf("") }
-
     var showPriorityWarning by remember { mutableStateOf(false) }
     var pendingPomodoroTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var pendingWorkDuration by remember { mutableIntStateOf(25) }
@@ -131,12 +125,6 @@ fun PomodoroScreen(
 
     var dndEnabled by rememberSaveable {
         mutableStateOf(FocusDndManager.didChangeFilter(context))
-    }
-
-    LaunchedEffect(Unit) {
-        val quote = QuotesApi.getTimedQuote()
-        currentQuote = quote.text
-        quoteAuthor = quote.author
     }
 
     LaunchedEffect(activePomodoro) {
@@ -175,10 +163,6 @@ fun PomodoroScreen(
                         vibrator.vibrate(500)
                     }
                 } catch (_: Exception) {}
-
-                val quote = QuotesApi.getTimedQuote()
-                currentQuote = quote.text
-                quoteAuthor = quote.author
             }
         }
     }
@@ -250,15 +234,10 @@ fun PomodoroScreen(
             ) {
                 Box(modifier = Modifier.widthIn(max = Dimens.ContentMaxWidth)) {
                     TopAppBar(
-                        title = { Text("Pomodoro Timer") },
-                        navigationIcon = {
-                            IconButton(onClick = { navController.navigateToHome() }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                            }
-                        },
+                        title = { Text("Focus") },
                         actions = {
-                            IconButton(onClick = { navController.navigateSingleTop(Screen.SavedQuotes.route) }) {
-                                Icon(Icons.Default.Favorite, contentDescription = "Saved Quotes")
+                            IconButton(onClick = { navController.navigateSingleTop(Screen.Timer.route) }) {
+                                Icon(Icons.Default.Timer, contentDescription = "Log time manually")
                             }
                         }
                     )
@@ -479,68 +458,6 @@ fun PomodoroScreen(
                                     onClick = { selectedBreakDuration = duration },
                                     label = { Text("${duration}m") },
                                     modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = animatedActiveColor.copy(alpha = 0.06f)
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        val isSaved by remember(currentQuote, savedQuotes) {
-                            derivedStateOf { savedQuotes.any { it.text == currentQuote } }
-                        }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.FormatQuote,
-                                contentDescription = null,
-                                tint = animatedActiveColor.copy(alpha = 0.5f),
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = currentQuote,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 3,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                                if (quoteAuthor.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "\u2014 $quoteAuthor",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (isSaved) {
-                                        val savedQuote = savedQuotes.find { it.text == currentQuote }
-                                        savedQuote?.let { viewModel.deleteSavedQuote(it) }
-                                    } else {
-                                        viewModel.saveQuote(currentQuote, quoteAuthor)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                    contentDescription = if (isSaved) "Unsave" else "Save",
-                                    tint = if (isSaved) MaterialTheme.colorScheme.primary else animatedActiveColor
                                 )
                             }
                         }

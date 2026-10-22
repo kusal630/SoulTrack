@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,51 +50,33 @@ import io.github.dailytrack.ui.savedquotes.SavedQuotesScreen
 import io.github.dailytrack.ui.sync.SyncSettingsScreen
 import io.github.dailytrack.ui.habit.HabitScreen
 import io.github.dailytrack.ui.explore.ExploreScreen
-import io.github.dailytrack.ui.focus.FocusModeScreen
 import io.github.dailytrack.ui.reminders.RemindersScreen
 import io.github.dailytrack.ui.history.HistoryScreen
-import io.github.dailytrack.ui.insights.WeeklyReportScreen
 import io.github.dailytrack.ui.planner.PlannerScreen
-import io.github.dailytrack.ui.projects.ProjectsScreen
-import io.github.dailytrack.ui.learning.LearningLoopScreen
-import io.github.dailytrack.ui.compounding.CompoundingScreen
-import io.github.dailytrack.ui.weekly.WeeklyReviewScreen
-import io.github.dailytrack.ui.gamification.GamificationScreen
 import io.github.dailytrack.ui.components.Hairline
-import io.github.dailytrack.ui.theme.ProductiveColor
-import io.github.dailytrack.data.db.entity.GoalEntity
-import io.github.dailytrack.data.db.entity.ReminderEntity
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
-    data object Dashboard : Screen("dashboard", "Home", Icons.Default.Home)
+    data object Dashboard : Screen("dashboard", "Today", Icons.Default.Home)
     data object Timer : Screen("timer", "Timer", Icons.Default.Timer)
-    data object Todo : Screen("todo", "Todo", Icons.Default.CheckCircle)
-    data object Pomodoro : Screen("pomodoro", "Pomodoro", Icons.Default.Coffee)
+    data object Todo : Screen("todo", "Tasks", Icons.Default.CheckCircle)
+    data object Pomodoro : Screen("pomodoro", "Focus", Icons.Default.CenterFocusStrong)
     data object Insights : Screen("insights", "Insights", Icons.Default.Lightbulb)
     data object Settings : Screen("settings", "Settings", Icons.Default.Settings)
     data object SavedQuotes : Screen("saved_quotes", "Saved Quotes", Icons.Default.Favorite)
     data object SyncSettings : Screen("sync_settings", "Sync", Icons.Default.Sync)
     data object Habits : Screen("habits", "Habits", Icons.Default.Flag)
-    data object Explore : Screen("explore", "Explore", Icons.Default.Explore)
-    data object FocusMode : Screen("focus_mode", "Focus", Icons.Default.CenterFocusStrong)
+    data object Explore : Screen("explore", "More", Icons.Default.MoreHoriz)
     data object Reminders : Screen("reminders", "Reminders", Icons.Default.Alarm)
     data object History : Screen("history", "History", Icons.Default.History)
-    data object WeeklyReport : Screen("weekly_report", "Report", Icons.Default.Assessment)
-    data object Achievements : Screen("achievements", "Achievements", Icons.Default.EmojiEvents)
     data object Planner : Screen("planner", "Planner", Icons.Default.EventNote)
-    data object Projects : Screen("projects", "Projects", Icons.Default.ReportProblem)
-    data object LearningLoop : Screen("learning_loop", "Learning", Icons.Default.School)
-    data object Compounding : Screen("compounding", "Compounding", Icons.Default.TrendingUp)
-    data object WeeklyReview : Screen("weekly_review", "Review", Icons.Default.FactCheck)
 }
 
 val bottomNavItems = listOf(
     Screen.Dashboard,
-    Screen.Timer,
-    Screen.Todo,
     Screen.Pomodoro,
+    Screen.Todo,
     Screen.Insights,
 )
 
@@ -200,20 +181,6 @@ fun DailyTrackNavHost() {
                 Spacer(modifier = Modifier.weight(1f))
                 Hairline()
                 Spacer(modifier = Modifier.height(8.dp))
-                NavigationRailItem(
-                    selected = currentRoute == Screen.Explore.route,
-                    onClick = { onSelect(Screen.Explore) },
-                    icon = { Icon(Screen.Explore.icon, contentDescription = "Explore") },
-                    label = { Text("Explore") },
-                    alwaysShowLabel = true,
-                    colors = NavigationRailItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                )
                 NavigationRailItem(
                     selected = currentRoute == Screen.Settings.route,
                     onClick = { onSelect(Screen.Settings) },
@@ -324,17 +291,6 @@ private fun AppNavHost(
         }
         composable(Screen.Explore.route) { ExploreScreen(navController) }
         composable(Screen.History.route) { HistoryScreen(navController) }
-        composable(Screen.FocusMode.route) {
-            var focusActive by rememberSaveable { mutableStateOf(false) }
-            var focusSound by rememberSaveable { mutableStateOf("") }
-            FocusModeScreen(
-                isFocusActive = focusActive,
-                selectedSound = focusSound.ifEmpty { null },
-                onToggleFocus = { focusActive = !focusActive },
-                onSelectSound = { focusSound = it },
-                onBack = { navController.navigateToHome() }
-            )
-        }
         composable(Screen.Reminders.route) {
             val viewModel: MainViewModel = viewModel()
             val reminders by viewModel.reminders.collectAsState()
@@ -346,31 +302,7 @@ private fun AppNavHost(
                 onBack = { navController.navigateToHome() }
             )
         }
-        composable(Screen.WeeklyReport.route) {
-            val viewModel: MainViewModel = viewModel()
-            val weeklyData by viewModel.weeklyReport.collectAsState()
-            val productivityScore by viewModel.productivityScore.collectAsState()
-            WeeklyReportScreen(
-                weeklyData = weeklyData,
-                productivityScore = productivityScore,
-                onBack = { navController.navigateToHome() }
-            )
-        }
         composable(Screen.Planner.route) { PlannerScreen(navController) }
-        composable(Screen.Projects.route) { ProjectsScreen(navController) }
-        composable(Screen.LearningLoop.route) { LearningLoopScreen(navController) }
-        composable(Screen.Compounding.route) { CompoundingScreen(navController) }
-        composable(Screen.WeeklyReview.route) { WeeklyReviewScreen(navController) }
-        composable(Screen.Achievements.route) {
-            val viewModel: MainViewModel = viewModel()
-            val userStats by viewModel.userStats.collectAsState()
-            val achievements by viewModel.achievements.collectAsState()
-            GamificationScreen(
-                userStats = userStats,
-                achievements = achievements,
-                onBack = { navController.navigateToHome() }
-            )
-        }
         composable(Screen.Habits.route) {
             val viewModel: MainViewModel = viewModel()
             val habits by viewModel.habits.collectAsState()

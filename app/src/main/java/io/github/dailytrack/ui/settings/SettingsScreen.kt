@@ -120,23 +120,23 @@ fun SettingsScreen(navController: NavController) {
     ) {
         item {
             SectionTitle(
-                title = "Discover",
-                subtitle = "Everything beyond the timer",
+                title = "More",
+                subtitle = "Secondary tools, kept out of the way",
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
 
         item {
-            SettingsSection(title = "Explore", icon = Icons.Default.Explore) {
+            SettingsSection(title = "More tools", icon = Icons.Default.MoreHoriz) {
                 Text(
-                    "Sleep, exercise, nutrition, body, journal, goals, reminders, history, analytics, reports and achievements.",
+                    "Habits, history, reminders and saved quotes.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 PrimaryCta(
-                    text = "Open Explore",
-                    icon = Icons.Default.Explore,
+                    text = "Open More",
+                    icon = Icons.Default.MoreHoriz,
                     onClick = { navController.navigate(Screen.Explore.route) }
                 )
             }

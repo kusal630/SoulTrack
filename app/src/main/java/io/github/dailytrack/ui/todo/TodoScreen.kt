@@ -58,9 +58,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-enum class TodoFilter { ALL, HIGH, MEDIUM, LOW, OVERDUE }
-enum class TodoSortOrder { PRIORITY_DESC, PRIORITY_ASC, DEADLINE, NEWEST, OLDEST }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodoScreen(
@@ -76,11 +73,8 @@ fun TodoScreen(
     val highPriorityCount by viewModel.highPriorityCount.collectAsState()
     val overdueCount by viewModel.overdueCount.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
-    var activeFilter by remember { mutableStateOf(TodoFilter.ALL) }
-    var sortOrder by remember { mutableStateOf(TodoSortOrder.PRIORITY_DESC) }
     var showPriorityWarning by remember { mutableStateOf(false) }
     var pendingPomodoroTodo by remember { mutableStateOf<TodoEntity?>(null) }
-    var showSortMenu by remember { mutableStateOf(false) }
     var showClearCompletedDialog by remember { mutableStateOf(false) }
     var showLogWorkDialog by remember { mutableStateOf(false) }
 
@@ -90,100 +84,25 @@ fun TodoScreen(
         dayProgressFor(today, allTodos)
     }
 
-    val filteredTodos = remember(activeTodos, activeFilter, sortOrder) {
-        val filtered = when (activeFilter) {
-            TodoFilter.ALL -> activeTodos
-            TodoFilter.HIGH -> activeTodos.filter { it.priority == 3 }
-            TodoFilter.MEDIUM -> activeTodos.filter { it.priority == 2 }
-            TodoFilter.LOW -> activeTodos.filter { it.priority == 1 }
-            TodoFilter.OVERDUE -> activeTodos.filter {
-                it.deadline != null && it.deadline < System.currentTimeMillis()
-            }
-        }
-        when (sortOrder) {
-            TodoSortOrder.PRIORITY_DESC -> filtered.sortedByDescending { it.priority }
-            TodoSortOrder.PRIORITY_ASC -> filtered.sortedBy { it.priority }
-            TodoSortOrder.DEADLINE -> filtered.sortedBy { it.deadline ?: Long.MAX_VALUE }
-            TodoSortOrder.NEWEST -> filtered.sortedByDescending { it.createdAt }
-            TodoSortOrder.OLDEST -> filtered.sortedBy { it.createdAt }
-        }
+    val filteredTodos = remember(activeTodos) {
+        activeTodos.sortedWith(
+            compareByDescending<TodoEntity> { it.priority }
+                .thenBy { it.deadline ?: Long.MAX_VALUE }
+        )
     }
 
     ScreenList(
         title = "Tasks",
         subtitle = "What deserves your attention",
-        onBack = { navController.navigateToHome() },
         actions = {
             IconButton(onClick = { navController.navigateSingleTop(Screen.Planner.route) }) {
-                Icon(Icons.Default.EventNote, contentDescription = "Smart planner")
-            }
-            Box {
-                        IconButton(onClick = { showSortMenu = true }) {
-                            Icon(Icons.Default.Sort, contentDescription = "Sort")
-                        }
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Priority (High first)") },
-                                onClick = { sortOrder = TodoSortOrder.PRIORITY_DESC; showSortMenu = false },
-                                leadingIcon = if (sortOrder == TodoSortOrder.PRIORITY_DESC) {
-                                    { Icon(Icons.Default.Check, contentDescription = null) }
-                                } else null
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Priority (Low first)") },
-                                onClick = { sortOrder = TodoSortOrder.PRIORITY_ASC; showSortMenu = false },
-                                leadingIcon = if (sortOrder == TodoSortOrder.PRIORITY_ASC) {
-                                    { Icon(Icons.Default.Check, contentDescription = null) }
-                                } else null
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Deadline") },
-                                onClick = { sortOrder = TodoSortOrder.DEADLINE; showSortMenu = false },
-                                leadingIcon = if (sortOrder == TodoSortOrder.DEADLINE) {
-                                    { Icon(Icons.Default.Check, contentDescription = null) }
-                                } else null
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Newest first") },
-                                onClick = { sortOrder = TodoSortOrder.NEWEST; showSortMenu = false },
-                                leadingIcon = if (sortOrder == TodoSortOrder.NEWEST) {
-                                    { Icon(Icons.Default.Check, contentDescription = null) }
-                                } else null
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Oldest first") },
-                                onClick = { sortOrder = TodoSortOrder.OLDEST; showSortMenu = false },
-                                leadingIcon = if (sortOrder == TodoSortOrder.OLDEST) {
-                                    { Icon(Icons.Default.Check, contentDescription = null) }
-                                } else null
-                            )
-                        }
+                Icon(Icons.Default.EventNote, contentDescription = "Plan my day")
             }
             IconButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Todo")
+                Icon(Icons.Default.Add, contentDescription = "Add task")
             }
         }
     ) {
-            item {
-                TodoProgressOverview(
-                    activeCount = activeTodoCount,
-                    completedCount = completedTodoCount,
-                    highPriorityCount = highPriorityCount,
-                    overdueCount = overdueCount,
-                    dayProgress = dayProgressValue
-                )
-            }
-
-            item {
-                TodoFilterChips(
-                    activeFilter = activeFilter,
-                    onFilterChange = { activeFilter = it }
-                )
-            }
-
             if (filteredTodos.isNotEmpty()) {
                 items(filteredTodos, key = { it.id }) { todo ->
                     SwipeToCompleteRow(onComplete = { viewModel.completeTodo(todo.id) }) {
@@ -207,16 +126,6 @@ fun TodoScreen(
                         viewModel = viewModel
                     )
                     }
-                }
-            } else if (activeTodos.isNotEmpty()) {
-                item {
-                    EmptyState(
-                        title = "No tasks match this filter",
-                        message = "Clear the filter to see every task again.",
-                        icon = Icons.Default.FilterList,
-                        actionLabel = "Clear filter",
-                        onAction = { activeFilter = TodoFilter.ALL }
-                    )
                 }
             }
 
@@ -472,116 +381,6 @@ fun SwipeToCompleteRow(
         }
     ) {
         content()
-    }
-}
-
-@Composable
-fun TodoProgressOverview(
-    activeCount: Int,
-    completedCount: Int,
-    highPriorityCount: Int,
-    overdueCount: Int,
-    dayProgress: Float = 0f
-) {
-    val total = activeCount + completedCount
-    val status = when {
-        total == 0 -> DayStatus.NO_TASKS
-        dayProgress >= 1f -> DayStatus.DONE
-        else -> DayStatus.IN_PROGRESS
-    }
-    SurfaceCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            MiniSoulRing(
-                progress = dayProgress,
-                status = status,
-                isToday = true,
-                modifier = Modifier.size(80.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Today's ring",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    if (total == 0) {
-                        "Assign tasks to start the day ring"
-                    } else {
-                        "$completedCount done / $activeCount pending · ${status.label}"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (highPriorityCount > 0) {
-                    Text(
-                        "$highPriorityCount high priority",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                if (overdueCount > 0) {
-                    Text(
-                        "$overdueCount overdue",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TodoFilterChips(
-    activeFilter: TodoFilter,
-    onFilterChange: (TodoFilter) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        TodoFilter.entries.forEach { filter ->
-            FilterChip(
-                selected = activeFilter == filter,
-                onClick = { onFilterChange(filter) },
-                modifier = Modifier.height(48.dp),
-                label = {
-                    Text(
-                        when (filter) {
-                            TodoFilter.ALL -> "All"
-                            TodoFilter.HIGH -> "High"
-                            TodoFilter.MEDIUM -> "Med"
-                            TodoFilter.LOW -> "Low"
-                            TodoFilter.OVERDUE -> "Overdue"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (activeFilter == filter) FontWeight.SemiBold else FontWeight.Medium
-                    )
-                },
-                leadingIcon = if (activeFilter == filter) {
-                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null,
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                    selectedLabelColor = MaterialTheme.colorScheme.primary,
-                    selectedLeadingIconColor = MaterialTheme.colorScheme.primary
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    borderColor = MaterialTheme.colorScheme.outlineVariant,
-                    selectedBorderColor = MaterialTheme.colorScheme.primary,
-                    enabled = true,
-                    selected = activeFilter == filter
-                ),
-                shape = RoundedCornerShape(50)
-            )
-        }
     }
 }
 
