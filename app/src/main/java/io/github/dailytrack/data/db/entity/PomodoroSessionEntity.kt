@@ -28,6 +28,8 @@ data class PomodoroSessionEntity(
     val startTime: Long,
     val endTime: Long? = null,
     val durationMinutes: Int = 25,
+    /** Planned length of the cycle, kept when a cycle is stopped early. */
+    val plannedMinutes: Int = 0,
     val type: String = "WORK",
     val isCompleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()

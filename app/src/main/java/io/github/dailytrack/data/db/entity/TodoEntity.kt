@@ -56,6 +56,15 @@ data class TodoEntity(
      * raises attainment (Wang et al., 2021, g = 0.34).
      */
     val outcomeText: String = "",
+    /** Saved Eisenhower quadrant (1..4); 0 = infer from priority + deadline. */
+    val quadrant: Int = 0,
+    /** When the smart daily plan put this task on the calendar. */
+    val scheduledStart: Long? = null,
+    val scheduledEnd: Long? = null,
+    /** Quick-captured item that still needs triage. */
+    val isInbox: Boolean = false,
+    /** Pre-mortem project this task prevents a risk for. */
+    val projectId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

@@ -100,6 +100,7 @@ fun InsightsScreen(
     val loopStatus by viewModel.loopStatus.collectAsState()
     val switchReport by viewModel.switchReport.collectAsState()
     val weeklySwitchCounts by viewModel.weeklySwitchCounts.collectAsState()
+    val focusInsightReport by viewModel.focusInsightReport.collectAsState()
     val today = LocalDate.now()
 
     ScreenList(
@@ -175,6 +176,10 @@ fun InsightsScreen(
                 weeklyStats = weeklyStats,
                 dailyGoal = ProductTargets.pomodoroDailyGoal
             )
+        }
+
+        item {
+            FocusDataInsightsCard(report = focusInsightReport)
         }
 
         if (activeInsights.isEmpty()) {

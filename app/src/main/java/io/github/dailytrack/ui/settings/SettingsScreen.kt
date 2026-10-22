@@ -583,6 +583,10 @@ private fun FocusPermissionSection() {
     var autoDnd by remember { mutableStateOf(FocusSettings.isAutoDndEnabled(context)) }
     var noiseEnabled by remember { mutableStateOf(FocusSettings.isNoiseSensingEnabled(context)) }
     var recommendationsEnabled by remember { mutableStateOf(FocusSettings.isRecommendationsEnabled(context)) }
+    var startRitual by remember { mutableStateOf(FocusSettings.isStartRitualEnabled(context)) }
+    var stopWarning by remember { mutableStateOf(FocusSettings.isStopWarningEnabled(context)) }
+    var phoneAway by remember { mutableStateOf(FocusSettings.isPhoneAwayPromptEnabled(context)) }
+    var breakCoach by remember { mutableStateOf(FocusSettings.isBreakCoachEnabled(context)) }
     var budgetMinutes by remember { mutableIntStateOf(FocusSettings.getDistractionBudgetMinutes(context)) }
     var dndGranted by remember { mutableStateOf(FocusDndManager.hasAccess(context)) }
     var micGranted by remember { mutableStateOf(NoiseMonitor.hasPermission(context)) }
@@ -666,6 +670,58 @@ private fun FocusPermissionSection() {
         onCheckedChange = { enabled ->
             recommendationsEnabled = enabled
             FocusSettings.setRecommendationsEnabled(context, enabled)
+        }
+    )
+
+    PermissionToggle(
+        title = "5-second start ritual",
+        description = "Before a block begins, a short countdown asks you to put the phone away and name the one thing you will do.",
+        checked = startRitual,
+        granted = true,
+        grantedLabel = "Guided start",
+        missingLabel = "",
+        onCheckedChange = { enabled ->
+            startRitual = enabled
+            FocusSettings.setStartRitualEnabled(context, enabled)
+        }
+    )
+
+    PermissionToggle(
+        title = "Stop warning",
+        description = "When you end a focus block early, asks once whether it was a real stop or a reflex. Keeps accidental taps from erasing a session.",
+        checked = stopWarning,
+        granted = true,
+        grantedLabel = "Confirmation on stop",
+        missingLabel = "",
+        onCheckedChange = { enabled ->
+            stopWarning = enabled
+            FocusSettings.setStopWarningEnabled(context, enabled)
+        }
+    )
+
+    PermissionToggle(
+        title = "Phone-away prompt",
+        description = "During the start ritual, reminds you to leave the phone out of reach. This is the single highest-leverage change for deep work.",
+        checked = phoneAway,
+        granted = true,
+        grantedLabel = "Shown at start",
+        missingLabel = "",
+        onCheckedChange = { enabled ->
+            phoneAway = enabled
+            FocusSettings.setPhoneAwayPromptEnabled(context, enabled)
+        }
+    )
+
+    PermissionToggle(
+        title = "Break coach",
+        description = "After a completed block, suggests a concrete recovery activity instead of opening another feed.",
+        checked = breakCoach,
+        granted = true,
+        grantedLabel = "Shown after blocks",
+        missingLabel = "",
+        onCheckedChange = { enabled ->
+            breakCoach = enabled
+            FocusSettings.setBreakCoachEnabled(context, enabled)
         }
     )
 

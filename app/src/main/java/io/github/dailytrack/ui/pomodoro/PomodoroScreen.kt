@@ -64,6 +64,8 @@ import io.github.dailytrack.ui.components.SurfaceCard
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalView
 import io.github.dailytrack.service.FocusDndManager
+import io.github.dailytrack.service.FocusSettings
+import io.github.dailytrack.engine.FocusGuardrails
 import io.github.dailytrack.ui.theme.Aqua
 import io.github.dailytrack.ui.theme.Mint
 import io.github.dailytrack.ui.theme.Dimens
@@ -106,6 +108,8 @@ fun PomodoroScreen(
     var showPriorityWarning by remember { mutableStateOf(false) }
     var pendingPomodoroTodo by remember { mutableStateOf<TodoEntity?>(null) }
     var pendingWorkDuration by remember { mutableIntStateOf(25) }
+    var showStartRitual by remember { mutableStateOf(false) }
+    var showStopConfirm by remember { mutableStateOf(false) }
 
     val isRunning = activePomodoro != null
     val isBreak = activePomodoro?.type == "BREAK"
@@ -202,6 +206,39 @@ fun PomodoroScreen(
         animationSpec = tween(durationMillis = 500, easing = LinearEasing),
         label = "progress"
     )
+
+    val beginSessionNow: () -> Unit = start@{
+        val selectedTodo = activeTodos.find { it.id == selectedTodoId }
+        if (selectedTodo != null && selectedTodo.priority < 3) {
+            val higherPending = activeTodos.filter {
+                it.priority > selectedTodo.priority && it.id != selectedTodo.id
+            }
+            if (higherPending.isNotEmpty()) {
+                pendingPomodoroTodo = selectedTodo
+                pendingWorkDuration = selectedWorkDuration
+                showPriorityWarning = true
+                return@start
+            }
+        }
+
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        val todoTitle = activeTodos.find { it.id == selectedTodoId }?.title ?: ""
+        viewModel.startPomodoro(
+            todoId = if (selectedTodoId > 0) selectedTodoId else null,
+            categoryId = if (selectedCategoryId > 0) selectedCategoryId else null,
+            durationMinutes = selectedWorkDuration,
+            title = todoTitle,
+            breakDurationMinutes = selectedBreakDuration
+        )
+    }
+
+    val beginSession: () -> Unit = {
+        if (FocusSettings.isStartRitualEnabled(context)) {
+            showStartRitual = true
+        } else {
+            beginSessionNow()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -392,6 +429,17 @@ fun PomodoroScreen(
                     }
                 }
 
+                if (isBreak && FocusSettings.isBreakCoachEnabled(context)) {
+                    item {
+                        BreakCoachCard(
+                            suggestion = FocusGuardrails.breakCoach(
+                                completedCycles = completedPomodorosToday,
+                                shortBreakMinutes = selectedBreakDuration
+                            )
+                        )
+                    }
+                }
+
                 if (!isRunning) {
                     item {
                         Text(
@@ -537,31 +585,7 @@ fun PomodoroScreen(
 
                     item {
                         Button(
-                            onClick = {
-                                val selectedTodo = activeTodos.find { it.id == selectedTodoId }
-                                if (selectedTodo != null && selectedTodo.priority < 3) {
-                                    val higherPending = activeTodos.filter {
-                                        it.priority > selectedTodo.priority && it.id != selectedTodo.id
-                                    }
-                                    if (higherPending.isNotEmpty()) {
-                                        pendingPomodoroTodo = selectedTodo
-                                        pendingWorkDuration = selectedWorkDuration
-                                        showPriorityWarning = true
-                                        return@Button
-                                    }
-                                }
-
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
-                                val todoTitle = activeTodos.find { it.id == selectedTodoId }?.title ?: ""
-                                viewModel.startPomodoro(
-                                    todoId = if (selectedTodoId > 0) selectedTodoId else null,
-                                    categoryId = if (selectedCategoryId > 0) selectedCategoryId else null,
-                                    durationMinutes = selectedWorkDuration,
-                                    title = todoTitle,
-                                    breakDurationMinutes = selectedBreakDuration
-                                )
-                            },
+                            onClick = beginSession,
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             shape = RoundedCornerShape(50),
                             colors = ButtonDefaults.buttonColors(
@@ -579,7 +603,16 @@ fun PomodoroScreen(
                         Button(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                viewModel.stopPomodoro()
+                                val warning = FocusGuardrails.stopWarning(
+                                    elapsedMinutes = (elapsedSeconds / 60L).toInt(),
+                                    plannedMinutes = activePomodoro?.durationMinutes ?: selectedWorkDuration,
+                                    deepWork = true
+                                )
+                                if (!isBreak && FocusSettings.isStopWarningEnabled(context) && warning.shouldWarn) {
+                                    showStopConfirm = true
+                                } else {
+                                    viewModel.stopPomodoro()
+                                }
                             },
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             colors = ButtonDefaults.buttonColors(
@@ -651,6 +684,39 @@ fun PomodoroScreen(
                 }
             }
         }
+    }
+
+    if (showStartRitual) {
+        val ritualTodo = activeTodos.find { it.id == selectedTodoId }
+        StartRitualDialog(
+            taskTitle = ritualTodo?.title ?: "Focus block",
+            durationMinutes = selectedWorkDuration,
+            requirePhoneAway = FocusSettings.isPhoneAwayPromptEnabled(context) &&
+                FocusGuardrails.requiresPhoneAwayCheck(selectedWorkDuration, deepWork = true),
+            onDismiss = { showStartRitual = false },
+            onBegin = {
+                showStartRitual = false
+                beginSessionNow()
+            }
+        )
+    }
+
+    if (showStopConfirm) {
+        val stopWarning = FocusGuardrails.stopWarning(
+            elapsedMinutes = (elapsedSeconds / 60L).toInt(),
+            plannedMinutes = activePomodoro?.durationMinutes ?: selectedWorkDuration,
+            deepWork = true
+        )
+        ConfirmStopDialog(
+            title = stopWarning.title,
+            message = stopWarning.message,
+            confirmLabel = "End and record",
+            onConfirm = {
+                showStopConfirm = false
+                viewModel.stopPomodoro()
+            },
+            onDismiss = { showStopConfirm = false }
+        )
     }
 
     if (showPriorityWarning && pendingPomodoroTodo != null) {

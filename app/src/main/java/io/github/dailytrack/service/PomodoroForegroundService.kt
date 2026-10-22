@@ -247,6 +247,7 @@ class PomodoroForegroundService : Service() {
                         categoryId = categoryId,
                         startTime = startTime,
                         durationMinutes = durationMinutes,
+                        plannedMinutes = durationMinutes,
                         type = type,
                         isCompleted = false
                     )
