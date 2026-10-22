@@ -129,6 +129,8 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.documentfile)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.zxing.core)
+    implementation(libs.zxing.embedded)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

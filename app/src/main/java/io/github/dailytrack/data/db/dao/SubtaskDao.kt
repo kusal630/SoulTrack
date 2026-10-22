@@ -29,6 +29,12 @@ interface SubtaskDao {
     @Query("SELECT * FROM subtasks WHERE todoId = :todoId ORDER BY sortOrder ASC, createdAt ASC")
     suspend fun getSubtasksForTodoSync(todoId: Long): List<SubtaskEntity>
 
+    @Query("SELECT * FROM subtasks")
+    suspend fun getAllSubtasksSync(): List<SubtaskEntity>
+
+    @Query("SELECT * FROM subtasks WHERE id = :id")
+    suspend fun getById(id: Long): SubtaskEntity?
+
     @Query("SELECT COUNT(*) FROM subtasks WHERE todoId = :todoId AND isCompleted = 1")
     fun getCompletedCountForTodo(todoId: Long): Flow<Int>
 

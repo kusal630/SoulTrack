@@ -115,7 +115,8 @@ fun SettingsScreen(navController: NavController) {
     ScreenList(
         title = "Settings",
         subtitle = "Tune Soul Track to your day",
-        navController = navController
+        navController = navController,
+        compact = true
     ) {
         item {
             SectionTitle(
@@ -294,7 +295,7 @@ fun SettingsScreen(navController: NavController) {
         }
 
         item {
-            SettingsSection(title = "Sync", icon = Icons.Default.Sync) {
+            SettingsSection(title = "Sync", icon = Icons.Default.Devices) {
                 val app = context.applicationContext as SoulTrackApp
                 val syncUiState by app.syncManager.uiState.collectAsState()
                 Row(
@@ -302,13 +303,17 @@ fun SettingsScreen(navController: NavController) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Offline Device Sync", fontWeight = FontWeight.Medium)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Device Sync", fontWeight = FontWeight.Medium)
                         Text(
-                            if (syncUiState.isEnabled) "Syncing via Syncthing"
-                            else "Disabled",
+                            when {
+                                !syncUiState.p2pEnabled -> "Not set up"
+                                syncUiState.p2pPeers.isEmpty() -> "On · no paired devices"
+                                syncUiState.p2pPeers.size == 1 -> "On · 1 paired device"
+                                else -> "On · ${syncUiState.p2pPeers.size} paired devices"
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (syncUiState.isEnabled) MaterialTheme.colorScheme.primary
+                            color = if (syncUiState.p2pEnabled) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -319,7 +324,7 @@ fun SettingsScreen(navController: NavController) {
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                ActionButton("Sync Settings", Icons.Default.Sync) {
+                ActionButton("Sync Settings", Icons.Default.Devices) {
                     navController.navigate(Screen.SyncSettings.route)
                 }
             }

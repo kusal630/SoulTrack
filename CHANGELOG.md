@@ -23,8 +23,10 @@
 - **Break coach and stop guardrails.** A concrete recovery suggestion after each
   block, a phone-away prompt at the start, and a confirmation before abandoning
   a deep-work block early. All toggleable in Settings.
-- Room database v14 with new project, learning, compounding and weekly-review
-  tables, plus planner fields on tasks and planned minutes on focus sessions.
+- **Encrypted peer-to-peer device sync** (from the main branch): pair devices on
+  the local network and merge records with hybrid logical clocks and tombstones.
+- Room database v15 combining the focus-toolkit tables/fields with the sync
+  metadata tables, with migrations from both v13 and the sync-only v14.
 
 ## [2.10.0] - 2026-10-18
 

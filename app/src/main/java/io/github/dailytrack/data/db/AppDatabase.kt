@@ -58,9 +58,10 @@ import io.github.dailytrack.data.db.entity.*
         LearningReviewEntity::class,
         CompoundHabitEntity::class,
         CompoundLogEntity::class,
-        WeeklyReviewSessionEntity::class
+        WeeklyReviewSessionEntity::class,
+        SyncMetaEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -86,6 +87,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
     abstract fun toolkitDao(): ToolkitDao
     abstract fun parkedThoughtDao(): ParkedThoughtDao
+    abstract fun syncMetaDao(): SyncMetaDao
 
     companion object {
         @Volatile
@@ -268,6 +270,31 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                // Device-to-device sync identity, tombstones and hybrid clocks.
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS sync_meta (
+                        syncId TEXT NOT NULL PRIMARY KEY,
+                        entityType TEXT NOT NULL,
+                        localId INTEGER NOT NULL,
+                        hlc TEXT NOT NULL,
+                        payloadHash TEXT NOT NULL,
+                        naturalKey TEXT NOT NULL DEFAULT '',
+                        deleted INTEGER NOT NULL DEFAULT 0,
+                        updatedAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                // Not unique: unknown remote tombstones share localId 0.
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_meta_entityType_localId ON sync_meta(entityType, localId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_meta_entityType ON sync_meta(entityType)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_meta_naturalKey ON sync_meta(naturalKey)")
+            }
+        }
+
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP INDEX IF EXISTS index_sync_meta_entityType_localId")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_meta_entityType_localId ON sync_meta(entityType, localId)")
+
                 // Smart planner, inbox triage and pre-mortem linkage on tasks.
                 db.execSQL("ALTER TABLE todos ADD COLUMN quadrant INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE todos ADD COLUMN scheduledStart INTEGER")
@@ -374,7 +401,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "soultrack.db"
                 )
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                 .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance

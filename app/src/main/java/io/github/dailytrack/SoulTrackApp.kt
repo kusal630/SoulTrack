@@ -20,9 +20,11 @@ package io.github.dailytrack
 import android.app.Application
 import io.github.dailytrack.data.api.QuotesApi
 import io.github.dailytrack.data.db.AppDatabase
+import io.github.dailytrack.sync.P2pSyncEngine
 import io.github.dailytrack.sync.SyncManager
 import io.github.dailytrack.sync.SyncRepository
 import io.github.dailytrack.worker.DeadlineCheckWorker
+import io.github.dailytrack.worker.DeviceSyncWorker
 import io.github.dailytrack.worker.WeeklyReviewWorker
 import io.github.dailytrack.service.TimerStateStore
 import io.github.dailytrack.widget.QuoteWidgetProvider
@@ -39,8 +41,12 @@ class SoulTrackApp : Application() {
         SyncRepository(this, database)
     }
 
+    val p2pSync: P2pSyncEngine by lazy {
+        P2pSyncEngine(this)
+    }
+
     val syncManager: SyncManager by lazy {
-        SyncManager(this, syncRepository)
+        SyncManager(this, syncRepository, p2pSync)
     }
 
     override fun onCreate() {
@@ -62,5 +68,12 @@ class SoulTrackApp : Application() {
         }
         DeadlineCheckWorker.schedule(this)
         WeeklyReviewWorker.schedule(this)
+
+        if (p2pSync.isEnabled()) {
+            DeviceSyncWorker.schedule(this)
+            // Process-local listener. The foreground service/worker restores it
+            // whenever Android keeps the process alive.
+            runCatching { p2pSync.start() }
+        }
     }
 }
