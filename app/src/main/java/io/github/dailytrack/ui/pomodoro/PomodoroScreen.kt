@@ -462,6 +462,15 @@ fun PomodoroScreen(
                             }
                         }
                     }
+
+                    item {
+                        GhostCta(
+                            text = "Log time manually",
+                            icon = Icons.Default.Timer,
+                            onClick = { navController.navigateSingleTop(Screen.Timer.route) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
 
                 if (isBreak && FocusSettings.isBreakCoachEnabled(context)) {
