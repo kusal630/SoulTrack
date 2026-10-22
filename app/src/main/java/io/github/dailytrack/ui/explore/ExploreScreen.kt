@@ -60,6 +60,10 @@ private data class Destination(
 
 private val mindDestinations = listOf(
     Destination("Techniques", "Plan, focus and finish", Icons.AutoMirrored.Filled.MenuBook, Screen.Techniques.route, Color(0xFF7CF5C4)),
+    Destination("Daily planner", "Important work first", Icons.Default.EventNote, Screen.Planner.route, Color(0xFF10B981)),
+    Destination("Projects", "Pre-mortem the risks", Icons.Default.ReportProblem, Screen.Projects.route, Color(0xFFF97316)),
+    Destination("Learning loop", "Recall, compare, explain", Icons.Default.School, Screen.LearningLoop.route, Color(0xFF8B5CF6)),
+    Destination("Weekly review", "Five questions, five minutes", Icons.Default.FactCheck, Screen.WeeklyReview.route, Color(0xFF14B8A6)),
     Destination("Focus mode", "Block distractions", Icons.Default.CenterFocusStrong, Screen.FocusMode.route, Color(0xFF10B981)),
     Destination("Saved quotes", "Words that keep you going", Icons.Default.FormatQuote, Screen.SavedQuotes.route, Color(0xFF60A5FA)),
     Destination("Targets", "Your goals and features", Icons.Default.Flag, Screen.Settings.route, Color(0xFFA78BFA)),
@@ -67,6 +71,7 @@ private val mindDestinations = listOf(
 )
 
 private val progressDestinations = listOf(
+    Destination("Compounding", "Your 1% curves", Icons.Default.TrendingUp, Screen.Compounding.route, Color(0xFF22C55E)),
     Destination("History", "Every session logged", Icons.Default.History, Screen.History.route, Color(0xFF94A3B8)),
     Destination("Home", "Today's ring and time", Icons.Default.Home, Screen.Dashboard.route, Color(0xFF2DD4BF)),
     Destination("Weekly report", "Your seven-day recap", Icons.Default.Assessment, Screen.WeeklyReport.route, Color(0xFF38BDF8)),

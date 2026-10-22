@@ -58,6 +58,11 @@ import io.github.dailytrack.ui.focus.FocusModeScreen
 import io.github.dailytrack.ui.reminders.RemindersScreen
 import io.github.dailytrack.ui.history.HistoryScreen
 import io.github.dailytrack.ui.insights.WeeklyReportScreen
+import io.github.dailytrack.ui.planner.PlannerScreen
+import io.github.dailytrack.ui.projects.ProjectsScreen
+import io.github.dailytrack.ui.learning.LearningLoopScreen
+import io.github.dailytrack.ui.compounding.CompoundingScreen
+import io.github.dailytrack.ui.weekly.WeeklyReviewScreen
 import io.github.dailytrack.ui.gamification.GamificationScreen
 import io.github.dailytrack.ui.components.Hairline
 import io.github.dailytrack.ui.theme.ProductiveColor
@@ -83,6 +88,11 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object History : Screen("history", "History", Icons.Default.History)
     data object WeeklyReport : Screen("weekly_report", "Report", Icons.Default.Assessment)
     data object Achievements : Screen("achievements", "Achievements", Icons.Default.EmojiEvents)
+    data object Planner : Screen("planner", "Planner", Icons.Default.EventNote)
+    data object Projects : Screen("projects", "Projects", Icons.Default.ReportProblem)
+    data object LearningLoop : Screen("learning_loop", "Learning", Icons.Default.School)
+    data object Compounding : Screen("compounding", "Compounding", Icons.Default.TrendingUp)
+    data object WeeklyReview : Screen("weekly_review", "Review", Icons.Default.FactCheck)
 }
 
 val bottomNavItems = listOf(
@@ -357,6 +367,11 @@ private fun AppNavHost(
                 onBack = { navController.navigateToHome() }
             )
         }
+        composable(Screen.Planner.route) { PlannerScreen(navController) }
+        composable(Screen.Projects.route) { ProjectsScreen(navController) }
+        composable(Screen.LearningLoop.route) { LearningLoopScreen(navController) }
+        composable(Screen.Compounding.route) { CompoundingScreen(navController) }
+        composable(Screen.WeeklyReview.route) { WeeklyReviewScreen(navController) }
         composable(Screen.Achievements.route) {
             val viewModel: MainViewModel = viewModel()
             val userStats by viewModel.userStats.collectAsState()

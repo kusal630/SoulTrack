@@ -50,6 +50,8 @@ import io.github.dailytrack.ui.theme.Dimens
 import io.github.dailytrack.ui.theme.ExerciseColor
 import io.github.dailytrack.ui.theme.ProductiveColor
 import io.github.dailytrack.ui.navigateToHome
+import io.github.dailytrack.ui.Screen
+import io.github.dailytrack.ui.navigateSingleTop
 import io.github.dailytrack.ui.viewmodel.MainViewModel
 import java.time.Instant
 import java.time.LocalDate
@@ -112,6 +114,9 @@ fun TodoScreen(
         subtitle = "What deserves your attention",
         onBack = { navController.navigateToHome() },
         actions = {
+            IconButton(onClick = { navController.navigateSingleTop(Screen.Planner.route) }) {
+                Icon(Icons.Default.EventNote, contentDescription = "Smart planner")
+            }
             Box {
                         IconButton(onClick = { showSortMenu = true }) {
                             Icon(Icons.Default.Sort, contentDescription = "Sort")

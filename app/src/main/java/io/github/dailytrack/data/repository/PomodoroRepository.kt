@@ -35,6 +35,7 @@ class PomodoroRepository(private val pomodoroDao: PomodoroSessionDao) {
     suspend fun delete(pomodoro: PomodoroSessionEntity) = pomodoroDao.delete(pomodoro)
     suspend fun completePomodoro(id: Long, endTime: Long) = pomodoroDao.completePomodoro(id, endTime)
     suspend fun getPomodorosForDaySync(start: Long, end: Long): List<PomodoroSessionEntity> = pomodoroDao.getPomodorosForDaySync(start, end)
+    suspend fun getPomodorosBetween(start: Long, end: Long): List<PomodoroSessionEntity> = pomodoroDao.getPomodorosBetween(start, end)
     suspend fun getTotalWorkMinutesInRange(start: Long, end: Long): Int = pomodoroDao.getTotalWorkMinutesInRange(start, end) ?: 0
     suspend fun getTotalBreakMinutesInRange(start: Long, end: Long): Int = pomodoroDao.getTotalBreakMinutesInRange(start, end) ?: 0
     suspend fun getCompletedPomodoroCountInRange(start: Long, end: Long): Int = pomodoroDao.getCompletedPomodoroCountInRange(start, end)

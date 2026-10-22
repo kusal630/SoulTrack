@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.11.0] - 2026-10-22
+
+### Added
+- **Daily planner with a 5-second start ritual.** Tasks are sorted into the
+  Eisenhower matrix, important-not-urgent work is placed in your own best focus
+  hours, and each block is pre-split into pomodoros. A short countdown asks you
+  to put the phone away before the block starts.
+- **Inbox and two-minute triage.** Capture a thought without deciding where it
+  belongs, then either do it in a two-minute sprint or send it to the matrix.
+- **Pre-mortem projects.** Name how a project could fail first; every risk
+  becomes a dated prevention task and returns at the milestone for a
+  still-on-track check.
+- **Feynman learning loop.** Recall, compare with the source, explain in simple
+  words, then revisit on a spaced schedule until it is clear.
+- **1% compounding tracker.** Tiny daily increments, a growth curve, and a
+  forgiving streak that never zeroes out because of one missed day.
+- **Focus insights.** Best focus hours, estimate-versus-actual task time, time by
+  Eisenhower quadrant, and the pattern behind early-quit blocks.
+- **Guided weekly review.** Five questions - done, delete, failed and why,
+  lesson, next focus - with history and an optional next-week task.
+- **Break coach and stop guardrails.** A concrete recovery suggestion after each
+  block, a phone-away prompt at the start, and a confirmation before abandoning
+  a deep-work block early. All toggleable in Settings.
+- **Encrypted peer-to-peer device sync** (from the main branch): pair devices on
+  the local network and merge records with hybrid logical clocks and tombstones.
+- Room database v15 combining the focus-toolkit tables/fields with the sync
+  metadata tables, with migrations from both v13 and the sync-only v14.
+
 ## [2.10.0] - 2026-10-18
 
 ### Added

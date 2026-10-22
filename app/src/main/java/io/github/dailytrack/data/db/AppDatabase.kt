@@ -53,6 +53,12 @@ import io.github.dailytrack.data.db.entity.*
         UserStatsEntity::class,
         ReminderEntity::class,
         ParkedThoughtEntity::class,
+        ProjectEntity::class,
+        ProjectRiskEntity::class,
+        LearningReviewEntity::class,
+        CompoundHabitEntity::class,
+        CompoundLogEntity::class,
+        WeeklyReviewSessionEntity::class,
         SyncMetaEntity::class
     ],
     version = 15,
@@ -79,6 +85,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun goalDao(): GoalDao
     abstract fun achievementDao(): AchievementDao
     abstract fun reminderDao(): ReminderDao
+    abstract fun toolkitDao(): ToolkitDao
     abstract fun parkedThoughtDao(): ParkedThoughtDao
     abstract fun syncMetaDao(): SyncMetaDao
 
@@ -287,6 +294,103 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("DROP INDEX IF EXISTS index_sync_meta_entityType_localId")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_meta_entityType_localId ON sync_meta(entityType, localId)")
+
+                // Smart planner, inbox triage and pre-mortem linkage on tasks.
+                db.execSQL("ALTER TABLE todos ADD COLUMN quadrant INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE todos ADD COLUMN scheduledStart INTEGER")
+                db.execSQL("ALTER TABLE todos ADD COLUMN scheduledEnd INTEGER")
+                db.execSQL("ALTER TABLE todos ADD COLUMN isInbox INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE todos ADD COLUMN projectId INTEGER")
+                // Planned cycle length survives an early stop, so quit patterns
+                // can be computed honestly.
+                db.execSQL("ALTER TABLE pomodoro_sessions ADD COLUMN plannedMinutes INTEGER NOT NULL DEFAULT 0")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS projects (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        description TEXT NOT NULL DEFAULT '',
+                        failureScenario TEXT NOT NULL DEFAULT '',
+                        milestoneAt INTEGER,
+                        isArchived INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL DEFAULT 0,
+                        updatedAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS project_risks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        projectId INTEGER NOT NULL,
+                        text TEXT NOT NULL,
+                        preventionTodoId INTEGER,
+                        dueAt INTEGER,
+                        isResolved INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_project_risks_projectId ON project_risks(projectId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_project_risks_preventionTodoId ON project_risks(preventionTodoId)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS learning_reviews (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        topic TEXT NOT NULL,
+                        recallText TEXT NOT NULL DEFAULT '',
+                        missedPoints TEXT NOT NULL DEFAULT '',
+                        explanation TEXT NOT NULL DEFAULT '',
+                        stillUnclear INTEGER NOT NULL DEFAULT 0,
+                        stage INTEGER NOT NULL DEFAULT 3,
+                        attempt INTEGER NOT NULL DEFAULT 0,
+                        todoId INTEGER,
+                        sessionId INTEGER,
+                        nextReviewAt INTEGER,
+                        completedAt INTEGER,
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_reviews_nextReviewAt ON learning_reviews(nextReviewAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_reviews_completedAt ON learning_reviews(completedAt)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS compound_habits (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        unit TEXT NOT NULL DEFAULT 'reps',
+                        dailyIncrement REAL NOT NULL DEFAULT 1.0,
+                        dailyPercent REAL NOT NULL DEFAULT 1.0,
+                        startValue REAL NOT NULL DEFAULT 0.0,
+                        currentValue REAL NOT NULL DEFAULT 0.0,
+                        currentStreak INTEGER NOT NULL DEFAULT 0,
+                        bestStreak INTEGER NOT NULL DEFAULT 0,
+                        lastLogDate INTEGER,
+                        isArchived INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS compound_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        habitId INTEGER NOT NULL,
+                        epochDay INTEGER NOT NULL,
+                        amount REAL NOT NULL,
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_compound_logs_habitId_epochDay ON compound_logs(habitId, epochDay)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_compound_logs_habitId ON compound_logs(habitId)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS weekly_review_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        weekStart INTEGER NOT NULL,
+                        doneText TEXT NOT NULL DEFAULT '',
+                        deleteText TEXT NOT NULL DEFAULT '',
+                        failedText TEXT NOT NULL DEFAULT '',
+                        lessonText TEXT NOT NULL DEFAULT '',
+                        nextWeekFocus TEXT NOT NULL DEFAULT '',
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
             }
         }
 

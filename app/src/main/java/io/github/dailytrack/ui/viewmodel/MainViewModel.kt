@@ -61,6 +61,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val savedQuoteRepo = SavedQuoteRepository(db.savedQuoteDao())
     private val habitRepo = HabitRepository(db.habitDao())
     private val goalRepo = GoalRepository(db.goalDao())
+    private val toolkitDao = db.toolkitDao()
     private val routineEngine = RoutineLoopEngine()
 
     private val timeEngine = TimeCoverageEngine()
@@ -215,6 +216,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _weeklyStats = MutableStateFlow(WeeklyStats())
     val weeklyStats: StateFlow<WeeklyStats> = _weeklyStats
 
+    private val _projects = MutableStateFlow<List<ProjectEntity>>(emptyList())
+    val projects: StateFlow<List<ProjectEntity>> = _projects
+
+    private val _learningReviews = MutableStateFlow<List<LearningReviewEntity>>(emptyList())
+    val learningReviews: StateFlow<List<LearningReviewEntity>> = _learningReviews
+
+    private val _dueLearningReviews = MutableStateFlow<List<LearningReviewEntity>>(emptyList())
+    val dueLearningReviews: StateFlow<List<LearningReviewEntity>> = _dueLearningReviews
+
+    private val _compoundHabits = MutableStateFlow<List<CompoundHabitEntity>>(emptyList())
+    val compoundHabits: StateFlow<List<CompoundHabitEntity>> = _compoundHabits
+
+    private val _weeklyReviewSessions = MutableStateFlow<List<WeeklyReviewSessionEntity>>(emptyList())
+    val weeklyReviewSessions: StateFlow<List<WeeklyReviewSessionEntity>> = _weeklyReviewSessions
+
+    private val _focusInsightReport = MutableStateFlow(
+        FocusInsights.report(emptyList(), emptyList(), emptyList())
+    )
+    val focusInsightReport: StateFlow<FocusInsightReport> = _focusInsightReport
+
+    private val _dailyPlan = MutableStateFlow<DailyPlan?>(null)
+    val dailyPlan: StateFlow<DailyPlan?> = _dailyPlan
+
+    private val _inboxTodos = MutableStateFlow<List<TodoEntity>>(emptyList())
+    val inboxTodos: StateFlow<List<TodoEntity>> = _inboxTodos
+
     private val _dailyProductivity = MutableStateFlow<List<Pair<String, Float>>>(emptyList())
     val dailyProductivity: StateFlow<List<Pair<String, Float>>> = _dailyProductivity
 
@@ -252,12 +279,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             todoRepo.getActiveTodos().collect { todos ->
                 _activeTodos.value = todos
+                rebuildDailyPlan()
             }
         }
 
         viewModelScope.launch {
             todoRepo.getCompletedTodos().collect { todos ->
                 _completedTodos.value = todos
+                calculateFocusReport()
             }
         }
 
@@ -294,6 +323,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     calculateGrowthScore()
                     detectSwitches()
                     generateInsights()
+                    calculateFocusReport()
                     calculateDailyProductivity()
                     calculateWeeklyStats()
                     calculateWeeklyReport()
@@ -350,6 +380,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             pomodoroRepo.getActivePomodoro().collect { pomodoro ->
                 _activePomodoro.value = pomodoro
+            }
+        }
+
+        viewModelScope.launch {
+            toolkitDao.getProjects().collect { _projects.value = it }
+        }
+        viewModelScope.launch {
+            toolkitDao.getLearningReviews().collect { _learningReviews.value = it }
+        }
+        viewModelScope.launch {
+            toolkitDao.getDueLearningReviews(System.currentTimeMillis()).collect {
+                _dueLearningReviews.value = it
+            }
+        }
+        viewModelScope.launch {
+            toolkitDao.getCompoundHabits().collect { _compoundHabits.value = it }
+        }
+        viewModelScope.launch {
+            toolkitDao.getWeeklyReviewSessions().collect { _weeklyReviewSessions.value = it }
+        }
+        viewModelScope.launch {
+            _activeTodos.collect { todos ->
+                _inboxTodos.value = todos.filter { it.isInbox }
+                rebuildDailyPlan()
             }
         }
 
@@ -529,6 +583,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         reconcileStalePomodoro(now)
         reconcileStaleSession(now)
         syncWellbeing(now)
+        runCatching { _dueLearningReviews.value = toolkitDao.getDueLearningReviewsSync(now) }
         refreshBrain()
     }
 
@@ -1029,6 +1084,515 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         _growthScore.value = result.totalScore
         _growthResult.value = result
+    }
+
+    // ---------------------------------------------------------------------
+    // Focus toolkit: smart plan, inbox triage, learning, pre-mortem,
+    // compounding, weekly review and data-driven focus insights.
+    // ---------------------------------------------------------------------
+
+    private val _clutterCleared = MutableStateFlow(0)
+    val clutterCleared: StateFlow<Int> = _clutterCleared
+
+    private suspend fun calculateFocusReport() {
+        runCatching {
+            val zone = ZoneId.systemDefault()
+            val now = System.currentTimeMillis()
+            val windowStart = now - 30L * 24 * 3_600_000L
+            val sessions = sessionRepo.getSessionsInRangeSync(windowStart, now)
+            val pomodoros = pomodoroRepo.getPomodorosBetween(windowStart, now)
+            val cats = _categories.value
+
+            val bucket = mutableMapOf<Int, Pair<Int, Int>>()
+            val pomodoroHours = pomodoros
+                .filter { it.type == "WORK" }
+                .groupBy { Instant.ofEpochMilli(it.startTime).atZone(zone).hour }
+                .mapValues { (_, rows) ->
+                    rows.count { row ->
+                        val planned = row.plannedMinutes.takeIf { it > 0 } ?: row.durationMinutes
+                        row.durationMinutes >= planned * 0.8
+                    }
+                }
+
+            for (session in sessions) {
+                val end = session.endTime ?: minOf(now, now)
+                val minutes = ((end - session.startTime) / 60_000L).toInt()
+                if (minutes <= 0) continue
+                val type = cats[session.categoryId]?.type ?: session.type
+                if (type !in setOf("PRODUCTIVE", "LEARNING", "ACTIVITY")) continue
+                val hour = Instant.ofEpochMilli(session.startTime).atZone(zone).hour
+                val current = bucket[hour] ?: (0 to 0)
+                bucket[hour] = (current.first + minutes) to current.second
+            }
+            pomodoroHours.forEach { (hour, cycles) ->
+                val current = bucket[hour] ?: (0 to 0)
+                bucket[hour] = current.first to (current.second + cycles)
+            }
+            val samples = bucket.map { (hour, values) ->
+                HourSample(hour, values.first, values.second)
+            }
+
+            val tasks = (_activeTodos.value + _completedTodos.value).map { todo ->
+                TaskTime(
+                    taskId = todo.id,
+                    title = todo.title,
+                    quadrant = SmartPlanner.classify(
+                        PlannerTask(
+                            id = todo.id,
+                            title = todo.title,
+                            priority = todo.priority,
+                            deadline = todo.deadline,
+                            estimatedMinutes = todo.estimatedMinutes,
+                            savedQuadrant = todo.quadrant
+                        ),
+                        now
+                    ).number,
+                    estimatedMinutes = todo.estimatedMinutes,
+                    actualMinutes = todo.actualMinutes
+                )
+            }
+
+            val cycles = pomodoros.filter { it.type == "WORK" }.map { row ->
+                val planned = row.plannedMinutes.takeIf { it > 0 } ?: row.durationMinutes
+                CycleRecord(
+                    plannedMinutes = planned,
+                    actualMinutes = row.durationMinutes,
+                    completed = row.durationMinutes >= planned * 0.8
+                )
+            }
+
+            _focusInsightReport.value = FocusInsights.report(samples, tasks, cycles)
+            rebuildDailyPlan()
+        }
+    }
+
+    private fun rebuildDailyPlan() {
+        val report = _focusInsightReport.value
+        _dailyPlan.value = SmartPlanner.buildDay(
+            tasks = _activeTodos.value.map { todo ->
+                PlannerTask(
+                    id = todo.id,
+                    title = todo.title,
+                    priority = todo.priority,
+                    deadline = todo.deadline,
+                    estimatedMinutes = todo.estimatedMinutes,
+                    savedQuadrant = todo.quadrant,
+                    isCompleted = todo.isCompleted,
+                    isInbox = todo.isInbox
+                )
+            },
+            now = System.currentTimeMillis(),
+            bestHours = report.bestHours.map { it.hour },
+            pomodoroMinutes = 25
+        )
+    }
+
+    fun addInboxItem(title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            todoRepo.insert(
+                TodoEntity(
+                    title = trimmed,
+                    isInbox = true,
+                    priority = 1,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    /**
+     * The two-minute rule: if it takes less than two minutes, do it now in a
+     * tiny sprint; otherwise send it to the Eisenhower board for a decision.
+     */
+    fun triageInbox(todo: TodoEntity, underTwoMinutes: Boolean, quadrant: Int = 0) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            if (underTwoMinutes) {
+                todoRepo.update(
+                    todo.copy(isInbox = false, estimatedMinutes = 2, updatedAt = now)
+                )
+                startPomodoro(todo.id, todo.categoryId, 2, todo.title)
+            } else {
+                todoRepo.update(
+                    todo.copy(
+                        isInbox = false,
+                        quadrant = quadrant,
+                        updatedAt = now
+                    )
+                )
+            }
+            bumpClutterCleared()
+        }
+    }
+
+    fun dismissInboxItem(todo: TodoEntity) {
+        viewModelScope.launch {
+            todoRepo.delete(todo)
+            bumpClutterCleared()
+        }
+    }
+
+    private fun bumpClutterCleared() {
+        val app = getApplication<Application>()
+        val prefs = app.getSharedPreferences("focus_toolkit_prefs", Context.MODE_PRIVATE)
+        val next = prefs.getInt("clutter_cleared", 0) + 1
+        prefs.edit().putInt("clutter_cleared", next).apply()
+        _clutterCleared.value = next
+    }
+
+    fun setTodoQuadrant(todo: TodoEntity, quadrant: Int) {
+        viewModelScope.launch {
+            todoRepo.update(
+                todo.copy(quadrant = quadrant.coerceIn(0, 4), updatedAt = System.currentTimeMillis())
+            )
+        }
+    }
+
+    fun scheduleTodo(todo: TodoEntity, start: Long?, end: Long?) {
+        viewModelScope.launch {
+            todoRepo.update(
+                todo.copy(
+                    scheduledStart = start,
+                    scheduledEnd = end,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    fun applyDailyPlan(plan: DailyPlan) {
+        viewModelScope.launch {
+            val byId = _activeTodos.value.associateBy { it.id }
+            plan.blocks.forEach { block ->
+                byId[block.taskId]?.let { todo ->
+                    todoRepo.update(
+                        todo.copy(
+                            scheduledStart = block.startMillis,
+                            scheduledEnd = block.endMillis,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearDailyPlan() {
+        viewModelScope.launch {
+            _activeTodos.value.forEach { todo ->
+                if (todo.scheduledStart != null || todo.scheduledEnd != null) {
+                    todoRepo.update(todo.copy(scheduledStart = null, scheduledEnd = null))
+                }
+            }
+        }
+    }
+
+    fun startPlannedBlock(block: PlannedBlock) {
+        val todo = _activeTodos.value.firstOrNull { it.id == block.taskId } ?: return
+        startPomodoro(
+            todoId = todo.id,
+            categoryId = todo.categoryId,
+            durationMinutes = block.pomodoroMinutes,
+            title = todo.title
+        )
+    }
+
+    // Pre-mortem projects -------------------------------------------------
+
+    fun getProjectRisks(projectId: Long): Flow<List<ProjectRiskEntity>> =
+        toolkitDao.getRisks(projectId)
+
+    fun createProject(
+        title: String,
+        description: String,
+        failureScenario: String,
+        risks: List<PremortemRisk>,
+        milestoneDays: Int = 30
+    ) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val projectId = toolkitDao.insertProject(
+                ProjectEntity(
+                    title = trimmed,
+                    description = description.trim(),
+                    failureScenario = failureScenario.trim(),
+                    milestoneAt = now + milestoneDays.coerceAtLeast(1) * 24L * 3_600_000L,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+            createPreventionTasks(projectId, risks, now)
+        }
+    }
+
+    fun addProjectRisk(
+        projectId: Long,
+        text: String,
+        prevention: String,
+        dueInDays: Int
+    ) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            createPreventionTasks(
+                projectId,
+                listOf(PremortemRisk(text, prevention = prevention, dueInDays = dueInDays)),
+                System.currentTimeMillis()
+            )
+        }
+    }
+
+    private suspend fun createPreventionTasks(
+        projectId: Long,
+        risks: List<PremortemRisk>,
+        now: Long
+    ) {
+        Premortem.preventionTasks(risks, now).forEach { prevention ->
+            val todoId = todoRepo.insert(
+                TodoEntity(
+                    title = prevention.title,
+                    description = "Pre-mortem risk: ${prevention.riskText}",
+                    deadline = prevention.dueAt,
+                    estimatedMinutes = 25,
+                    priority = 3,
+                    projectId = projectId,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+            toolkitDao.insertRisk(
+                ProjectRiskEntity(
+                    projectId = projectId,
+                    text = prevention.riskText,
+                    preventionTodoId = todoId,
+                    dueAt = prevention.dueAt,
+                    createdAt = now
+                )
+            )
+        }
+    }
+
+    fun setProjectRiskResolved(risk: ProjectRiskEntity, resolved: Boolean) {
+        viewModelScope.launch {
+            toolkitDao.setRiskResolved(risk.id, resolved)
+            if (resolved) {
+                risk.preventionTodoId?.let { runCatching { todoRepo.completeTodo(it) } }
+            }
+        }
+    }
+
+    fun deleteRisk(risk: ProjectRiskEntity) {
+        viewModelScope.launch { toolkitDao.deleteRisk(risk.id) }
+    }
+
+    fun archiveProject(project: ProjectEntity) {
+        viewModelScope.launch {
+            toolkitDao.updateProject(project.copy(isArchived = true, updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    // Learning loop -------------------------------------------------------
+
+    fun saveLearningReview(
+        topic: String,
+        recallText: String,
+        missedPoints: String,
+        explanation: String,
+        stillUnclear: Boolean,
+        todoId: Long? = null,
+        sessionId: Long? = null
+    ) {
+        val trimmed = topic.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            val attempt = _learningReviews.value.count { it.topic.equals(trimmed, ignoreCase = true) }
+            val draft = LearningDraft(
+                topic = trimmed,
+                recallText = recallText.trim(),
+                missedPoints = missedPoints.trim(),
+                explanation = explanation.trim(),
+                stillUnclear = stillUnclear,
+                attempt = attempt
+            )
+            val now = System.currentTimeMillis()
+            val schedule = LearningLoop.schedule(draft, now)
+            toolkitDao.insertLearningReview(
+                LearningReviewEntity(
+                    topic = trimmed,
+                    recallText = draft.recallText,
+                    missedPoints = draft.missedPoints,
+                    explanation = draft.explanation,
+                    stillUnclear = stillUnclear,
+                    stage = 3,
+                    attempt = attempt + 1,
+                    todoId = todoId,
+                    sessionId = sessionId,
+                    nextReviewAt = schedule.nextReviewAt,
+                    createdAt = now
+                )
+            )
+        }
+    }
+
+    fun resolveLearningReview(review: LearningReviewEntity, stillUnclear: Boolean, explanation: String) {
+        viewModelScope.launch {
+            val draft = LearningDraft(
+                topic = review.topic,
+                recallText = review.recallText,
+                missedPoints = review.missedPoints,
+                explanation = explanation.trim().ifBlank { review.explanation },
+                stillUnclear = stillUnclear,
+                attempt = review.attempt
+            )
+            val now = System.currentTimeMillis()
+            val schedule = LearningLoop.schedule(draft, now)
+            toolkitDao.updateLearningReview(
+                review.copy(
+                    explanation = draft.explanation,
+                    stillUnclear = stillUnclear,
+                    attempt = review.attempt + 1,
+                    nextReviewAt = schedule.nextReviewAt,
+                    completedAt = null
+                )
+            )
+        }
+    }
+
+    fun markLearningReviewDone(review: LearningReviewEntity) {
+        viewModelScope.launch {
+            toolkitDao.completeLearningReview(review.id, System.currentTimeMillis())
+        }
+    }
+
+    fun deleteLearningReview(review: LearningReviewEntity) {
+        viewModelScope.launch { toolkitDao.deleteLearningReview(review) }
+    }
+
+    // Compounding tracker -------------------------------------------------
+
+    fun getCompoundLogs(habitId: Long): Flow<List<CompoundLogEntity>> =
+        toolkitDao.getCompoundLogs(habitId)
+
+    fun addCompoundHabit(
+        name: String,
+        unit: String,
+        dailyIncrement: Double,
+        dailyPercent: Double,
+        startValue: Double
+    ) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            toolkitDao.insertCompoundHabit(
+                CompoundHabitEntity(
+                    name = trimmed,
+                    unit = unit.trim().ifBlank { "reps" },
+                    dailyIncrement = dailyIncrement.coerceAtLeast(0.01),
+                    dailyPercent = dailyPercent.coerceIn(0.1, 10.0),
+                    startValue = startValue.coerceAtLeast(0.0),
+                    currentValue = startValue.coerceAtLeast(0.0)
+                )
+            )
+        }
+    }
+
+    fun toggleCompoundToday(habitId: Long) {
+        viewModelScope.launch {
+            val habit = toolkitDao.getCompoundHabit(habitId) ?: return@launch
+            val today = LocalDate.now()
+            val fromDay = today.minusDays(120).toEpochDay()
+            val logs = toolkitDao.getCompoundLogsSync(habitId, fromDay, today.toEpochDay())
+            val already = logs.firstOrNull { it.epochDay == today.toEpochDay() }
+            val updated = if (already != null) {
+                toolkitDao.deleteCompoundLog(habitId, today.toEpochDay())
+                logs.filterNot { it.epochDay == today.toEpochDay() }
+            } else {
+                toolkitDao.insertCompoundLog(
+                    CompoundLogEntity(
+                        habitId = habitId,
+                        epochDay = today.toEpochDay(),
+                        amount = habit.dailyIncrement
+                    )
+                )
+                logs + CompoundLogEntity(
+                    habitId = habitId,
+                    epochDay = today.toEpochDay(),
+                    amount = habit.dailyIncrement
+                )
+            }
+            val progress = Compounding.progress(
+                startValue = habit.startValue,
+                dailyIncrement = habit.dailyIncrement,
+                dailyPercent = habit.dailyPercent,
+                logs = updated.map {
+                    LocalDate.ofEpochDay(it.epochDay) to it.amount
+                },
+                today = today
+            )
+            toolkitDao.updateCompoundHabit(
+                habit.copy(
+                    currentValue = progress.currentValue,
+                    currentStreak = progress.streak.current,
+                    bestStreak = progress.streak.best,
+                    lastLogDate = progress.streak.lastLogged?.toEpochDay()
+                )
+            )
+        }
+    }
+
+    fun archiveCompoundHabit(habit: CompoundHabitEntity) {
+        viewModelScope.launch { toolkitDao.archiveCompoundHabit(habit.id) }
+    }
+
+    // Guided weekly review ------------------------------------------------
+
+    fun saveWeeklyReview(
+        doneText: String,
+        deleteText: String,
+        failedText: String,
+        lessonText: String,
+        nextWeekFocus: String
+    ) {
+        viewModelScope.launch {
+            val zone = ZoneId.systemDefault()
+            val weekStart = LocalDate.now(zone)
+                .with(java.time.DayOfWeek.MONDAY)
+                .atStartOfDay(zone)
+                .toInstant()
+                .toEpochMilli()
+            toolkitDao.insertWeeklyReviewSession(
+                WeeklyReviewSessionEntity(
+                    weekStart = weekStart,
+                    doneText = doneText.trim(),
+                    deleteText = deleteText.trim(),
+                    failedText = failedText.trim(),
+                    lessonText = lessonText.trim(),
+                    nextWeekFocus = nextWeekFocus.trim()
+                )
+            )
+            if (nextWeekFocus.isNotBlank()) {
+                todoRepo.insert(
+                    TodoEntity(
+                        title = nextWeekFocus.trim(),
+                        description = "Next week's focus from your weekly review",
+                        estimatedMinutes = 25,
+                        priority = 3,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
+    }
+
+    init {
+        _clutterCleared.value = getApplication<Application>()
+            .getSharedPreferences("focus_toolkit_prefs", Context.MODE_PRIVATE)
+            .getInt("clutter_cleared", 0)
     }
 
     companion object {

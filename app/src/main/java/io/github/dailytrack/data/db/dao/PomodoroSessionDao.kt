@@ -35,6 +35,9 @@ interface PomodoroSessionDao {
     @Query("SELECT * FROM pomodoro_sessions WHERE startTime >= :start AND startTime < :end ORDER BY startTime")
     suspend fun getPomodorosForDaySync(start: Long, end: Long): List<PomodoroSessionEntity>
 
+    @Query("SELECT * FROM pomodoro_sessions WHERE startTime >= :start AND startTime < :end ORDER BY startTime")
+    suspend fun getPomodorosBetween(start: Long, end: Long): List<PomodoroSessionEntity>
+
     @Query("SELECT * FROM pomodoro_sessions WHERE todoId = :todoId ORDER BY startTime DESC")
     fun getPomodorosForTodo(todoId: Long): Flow<List<PomodoroSessionEntity>>
 

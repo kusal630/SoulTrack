@@ -26,6 +26,10 @@ object FocusSettings {
     private const val KEY_NOISE = "noise_enabled"
     private const val KEY_RECOMMENDATIONS = "recommendations_enabled"
     private const val KEY_DISTRACTION_BUDGET = "distraction_budget_minutes"
+    private const val KEY_START_RITUAL = "start_ritual_enabled"
+    private const val KEY_STOP_WARNING = "stop_warning_enabled"
+    private const val KEY_PHONE_AWAY = "phone_away_enabled"
+    private const val KEY_BREAK_COACH = "break_coach_enabled"
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -64,5 +68,36 @@ object FocusSettings {
 
     fun setDistractionBudgetMinutes(context: Context, minutes: Int) {
         prefs(context).edit().putInt(KEY_DISTRACTION_BUDGET, minutes.coerceIn(0, 600)).apply()
+    }
+
+    fun isStartRitualEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_START_RITUAL, true)
+
+    fun setStartRitualEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_START_RITUAL, enabled).apply()
+    }
+
+    /** Ask before abandoning a focus block instead of letting a tap erase it. */
+    fun isStopWarningEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_STOP_WARNING, true)
+
+    fun setStopWarningEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_STOP_WARNING, enabled).apply()
+    }
+
+    /** Remind the user to put the phone out of reach during the start ritual. */
+    fun isPhoneAwayPromptEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PHONE_AWAY, true)
+
+    fun setPhoneAwayPromptEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PHONE_AWAY, enabled).apply()
+    }
+
+    /** Show a short recovery activity after a completed focus block. */
+    fun isBreakCoachEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_BREAK_COACH, true)
+
+    fun setBreakCoachEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_BREAK_COACH, enabled).apply()
     }
 }
