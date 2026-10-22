@@ -438,9 +438,8 @@ private fun OnboardingPermissionsPage() {
                 request = {
                     runCatching {
                         context.startActivity(
-                            android.content.Intent(
-                                android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS
-                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            io.github.dailytrack.wellbeing.UsageAccess.settingsIntent(context)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         )
                     }
                 }

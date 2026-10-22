@@ -42,5 +42,15 @@ object UsageAccess {
     }
 
     /** Settings screen that grants usage access. */
-    fun settingsIntent(): Intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+    fun settingsIntent(context: Context): Intent {
+        val appSpecific = Intent(
+            Settings.ACTION_USAGE_ACCESS_SETTINGS,
+            android.net.Uri.parse("package:${context.packageName}")
+        )
+        return if (appSpecific.resolveActivity(context.packageManager) != null) {
+            appSpecific
+        } else {
+            Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+        }
+    }
 }

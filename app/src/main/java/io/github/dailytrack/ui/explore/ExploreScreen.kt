@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.FormatQuote
@@ -59,6 +60,7 @@ private data class Destination(
 )
 
 private val secondaryDestinations = listOf(
+    Destination("Techniques", "Plan, focus and finish", Icons.AutoMirrored.Filled.MenuBook, Screen.Techniques.route, Color(0xFF7CF5C4)),
     Destination("Habits", "Daily routines", Icons.Default.Flag, Screen.Habits.route, Color(0xFF10B981)),
     Destination("History", "Every session logged", Icons.Default.History, Screen.History.route, Color(0xFF94A3B8)),
     Destination("Reminders", "Time and habit nudges", Icons.Default.Alarm, Screen.Reminders.route, Color(0xFFFBBF24)),

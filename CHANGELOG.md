@@ -2,6 +2,10 @@
 
 ## [2.12.0] - 2026-10-22
 
+### Added
+- **Techniques library:** illustrated, step-by-step guides for focus, habits,
+  planning, decision-making and review, each linking to the relevant tool.
+
 ### Changed
 - **Simplified navigation to four destinations:** Today, Focus, Tasks and
   Insights. Timer and Pomodoro no longer compete as separate tabs; Focus owns
@@ -16,8 +20,9 @@
 - **Tasks lost the progress overview, filter chips and sort menu.** The list is
   always priority-sorted, with quick add and the daily planner remaining in the
   header.
-- **Secondary tools moved to More:** habits, history, reminders and saved
-  quotes are available from Settings > More instead of a large Explore catalog.
+- **Secondary tools moved to More:** techniques, habits, history, reminders and
+  saved quotes are available from Settings > More instead of a large Explore
+  catalog.
 
 ### Removed
 - Duplicate Focus mode screen.

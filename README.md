@@ -27,8 +27,8 @@ aqua → sky gradient and Manrope typography. See [RESEARCH/DESIGN.md](RESEARCH/
   and logging for work already done.
 - **Insights**: a daily growth score, this week's seven status bars, and one
   active suggestion. No chart wall.
-- **More**: habits, history, reminders and saved quotes live here, out of the
-  daily path.
+- **More**: techniques, habits, history, reminders and saved quotes live here,
+  out of the daily path.
 - **Time tracking**: active timer with foreground service, manual logging and
   session history.
 - **Day classification**: every day ends as Done / Tasks not met / Not
@@ -49,8 +49,9 @@ rules:
 
 1. **One primary action per screen.** Today asks you to start or continue a
    focus block; everything else is secondary.
-2. **Progressive disclosure.** Habits, history, reminders and quotes sit under
-   More, while advanced planner and guardrail settings stay in Settings.
+2. **Progressive disclosure.** Techniques, habits, history, reminders and
+   quotes sit under More, while advanced planner and guardrail settings stay
+   in Settings.
 3. **Few, high-signal numbers.** Insights shows a score, a week pattern and one
    suggestion instead of a wall of overlapping charts.
 
