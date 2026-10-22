@@ -49,7 +49,8 @@ fun SavedQuotesScreen(
     ScreenList(
         title = "Saved Quotes",
         subtitle = "Words you wanted to keep",
-        navController = navController
+        navController = navController,
+        compact = true
     ) {
         if (savedQuotes.isEmpty()) {
             item {

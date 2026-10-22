@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.dailytrack.ui.components.PillChip
 import io.github.dailytrack.ui.components.PrimaryCta
+import io.github.dailytrack.ui.components.ScreenScaffold
 import io.github.dailytrack.ui.components.SectionTitle
 import io.github.dailytrack.ui.components.SurfaceCard
 import io.github.dailytrack.ui.theme.Dimens
@@ -64,7 +68,8 @@ fun FocusModeScreen(
     isFocusActive: Boolean,
     selectedSound: String?,
     onToggleFocus: () -> Unit,
-    onSelectSound: (String) -> Unit
+    onSelectSound: (String) -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     val sounds = listOf(
         AmbientSound("Rain", "🌧️"),
@@ -88,8 +93,21 @@ fun FocusModeScreen(
         listOf(ProductiveColor, ProductiveColor.copy(alpha = 0.75f))
     )
 
+    ScreenScaffold(
+        title = "Focus mode",
+        subtitle = "One session at a time",
+        onBack = onBack,
+        compact = true
+    ) { padding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+    ) {
     Column(
         modifier = Modifier
+            .align(Alignment.TopCenter)
+            .widthIn(max = Dimens.ContentMaxWidth)
             .fillMaxSize()
             .padding(Dimens.ScreenPadding)
             .verticalScroll(rememberScrollState())
@@ -162,5 +180,7 @@ fun FocusModeScreen(
                 }
             }
         }
+    }
+    }
     }
 }

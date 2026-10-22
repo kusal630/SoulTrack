@@ -32,8 +32,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,7 +81,7 @@ private fun getCategoryColor(type: String): Color = when (type) {
     else -> NeutralColor
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TimerScreen(
     navController: NavController,
@@ -169,27 +167,36 @@ fun TimerScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Timer",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Box(modifier = Modifier.widthIn(max = Dimens.ContentMaxWidth)) {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                "Timer",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { navController.navigateToHome() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                            actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateToHome() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = Color.Transparent,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            )
+                }
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
@@ -217,292 +224,310 @@ fun TimerScreen(
         ) {
             Column(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = Dimens.ContentMaxWidth)
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(320.dp)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (isRunning) {
-                        Canvas(
-                            modifier = Modifier
-                                .size(360.dp)
-                                .blur(32.dp)
-                        ) {
-                            drawCircle(
-                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.4f),
-                                radius = size.minDimension / 2
-                            )
-                        }
-                        Canvas(
-                            modifier = Modifier
-                                .size(340.dp)
-                                .blur(12.dp)
-                        ) {
-                            drawCircle(
-                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.25f),
-                                radius = size.minDimension / 2
-                            )
-                        }
-                        Canvas(
-                            modifier = Modifier
-                                .size(320.dp)
-                                .blur(4.dp)
-                        ) {
-                            drawCircle(
-                                color = animatedCategoryColor.copy(alpha = glowAlpha * 0.15f),
-                                radius = size.minDimension / 2
-                            )
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    val ringTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                    Canvas(modifier = Modifier.size(300.dp)) {
-                        val strokeWidth = 10.dp.toPx()
-                        val diameter = size.minDimension - strokeWidth
-                        val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
-                        val arcSize = Size(diameter, diameter)
-
-                        drawArc(
-                            color = ringTrackColor,
-                            startAngle = -90f,
-                            sweepAngle = 360f,
-                            useCenter = false,
-                            topLeft = topLeft,
-                            size = arcSize,
-                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                        )
-
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(Dimens.HeroRing)
+                    ) {
                         if (isRunning) {
+                            Canvas(
+                                modifier = Modifier
+                                    .requiredSize(360.dp)
+                                    .blur(32.dp)
+                            ) {
+                                drawCircle(
+                                    color = animatedCategoryColor.copy(alpha = glowAlpha * 0.4f),
+                                    radius = 122.dp.toPx()
+                                )
+                            }
+                            Canvas(
+                                modifier = Modifier
+                                    .requiredSize(330.dp)
+                                    .blur(12.dp)
+                            ) {
+                                drawCircle(
+                                    color = animatedCategoryColor.copy(alpha = glowAlpha * 0.25f),
+                                    radius = 122.dp.toPx()
+                                )
+                            }
+                        }
+
+                        val ringTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        Canvas(modifier = Modifier.size(248.dp)) {
+                            val strokeWidth = 10.dp.toPx()
+                            val diameter = size.minDimension - strokeWidth
+                            val topLeft = Offset(strokeWidth / 2, strokeWidth / 2)
+                            val arcSize = Size(diameter, diameter)
+
                             drawArc(
-                                brush = Brush.sweepGradient(
-                                    colors = listOf(
-                                        animatedCategoryColor,
-                                        animatedCategoryColor.copy(alpha = 0.6f),
-                                        animatedCategoryColor,
-                                        animatedCategoryColor.copy(alpha = 0.6f),
-                                        animatedCategoryColor
-                                    )
-                                ),
+                                color = ringTrackColor,
                                 startAngle = -90f,
-                                sweepAngle = 360f * animatedRingProgress,
+                                sweepAngle = 360f,
                                 useCenter = false,
                                 topLeft = topLeft,
                                 size = arcSize,
                                 style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                             )
-                        }
-                    }
 
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = String.format(
-                                java.util.Locale.US,
-                                "%02d:%02d:%02d",
-                                hours, minutes, seconds
-                            ),
-                            style = MaterialTheme.typography.displayLarge,
-                            color = if (isRunning) animatedCategoryColor
-                            else MaterialTheme.colorScheme.onSurface,
-                            letterSpacing = 2.sp
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = if (isRunning) {
-                                activeSession?.title?.ifBlank {
-                                    categories[activeSession?.categoryId]?.name ?: "Tracking"
-                                } ?: "Tracking"
-                            } else "Ready to focus",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        if (isRunning) {
+                            if (isRunning) {
+                                drawArc(
+                                    brush = Brush.sweepGradient(
+                                        colors = listOf(
+                                            animatedCategoryColor,
+                                            animatedCategoryColor.copy(alpha = 0.6f),
+                                            animatedCategoryColor,
+                                            animatedCategoryColor.copy(alpha = 0.6f),
+                                            animatedCategoryColor
+                                        )
+                                    ),
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * animatedRingProgress,
+                                    useCenter = false,
+                                    topLeft = topLeft,
+                                    size = arcSize,
+                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                                )
+                            }
+                        }
+
+                        val ringCategory = activeSession?.categoryId
+                            ?.let { categories[it]?.name }.orEmpty()
+                        val ringTitle = if (isRunning) {
+                            activeSession?.title?.ifBlank {
+                                ringCategory.ifBlank { "Tracking" }
+                            } ?: "Tracking"
+                        } else {
+                            "Ready to focus"
+                        }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = String.format(
+                                    java.util.Locale.US,
+                                    "%02d:%02d:%02d",
+                                    hours, minutes, seconds
+                                ),
+                                style = MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = 48.sp,
+                                    lineHeight = 54.sp
+                                ),
+                                color = if (isRunning) animatedCategoryColor
+                                else MaterialTheme.colorScheme.onSurface,
+                                letterSpacing = 2.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = activeSession?.categoryId?.let { categories[it]?.name } ?: "",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = animatedCategoryColor.copy(alpha = 0.7f)
+                                text = ringTitle,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
                             )
+                            if (isRunning && ringCategory.isNotBlank() && ringCategory != ringTitle) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = ringCategory,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = animatedCategoryColor.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                if (!isRunning) {
-                    SectionTitle(title = "Choose category")
-                    if (showCategoryError) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Pick a category before starting",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(Dimens.TitleGap))
-
-                    val quickCategories = categories.values
-                        .filter { !it.archived }
-                        .sortedBy { it.name }
-                        .take(8)
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(quickCategories) { category ->
-                            val isSelected = selectedCategoryId == category.id
-                            val chipColor = getCategoryColor(category.type)
-
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    selectedCategoryId = category.id
-                                    showCategoryError = false
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                },
-                                modifier = Modifier.height(48.dp),
-                                label = {
-                                    Text(
-                                        category.name,
-                                        maxLines = 1,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                },
-                                leadingIcon = if (isSelected) {
-                                    {
-                                        Icon(
-                                            Icons.Default.Check,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                } else null,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = chipColor.copy(alpha = 0.2f),
-                                    selectedLabelColor = chipColor,
-                                    selectedLeadingIconColor = chipColor,
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    borderColor = MaterialTheme.colorScheme.outlineVariant,
-                                    selectedBorderColor = chipColor,
-                                    enabled = true,
-                                    selected = isSelected
-                                ),
-                                shape = RoundedCornerShape(50)
-                            )
-                        }
-                    }
-
-                    if (quickCategories.isEmpty()) {
-                        EmptyState(
-                            title = "No categories yet",
-                            message = "Create a category in Settings, then come back to start tracking.",
-                            icon = Icons.Default.Category,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedTextField(
-                        value = sessionTitle,
-                        onValueChange = {
-                            sessionTitle = it
-                            showTitleError = false
-                        },
-                        label = {
-                            Text("Session name (optional)")
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = MaterialTheme.shapes.medium
-                    )
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    PrimaryCta(
-                        text = "Start Tracking",
-                        icon = Icons.Default.PlayArrow,
-                        onClick = {
-                            if (selectedCategoryId == 0L) {
-                                showCategoryError = true
-                                return@PrimaryCta
+                    if (!isRunning) {
+                        SectionTitle(title = "Choose category", modifier = Modifier.fillMaxWidth())
+                        if (showCategoryError) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Pick a category before starting",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(Dimens.TitleGap))
+
+                        val quickCategories = categories.values
+                            .filter { !it.archived }
+                            .sortedBy { it.name }
+                            .take(8)
+
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            quickCategories.forEach { category ->
+                                val isSelected = selectedCategoryId == category.id
+                                val chipColor = getCategoryColor(category.type)
+
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        selectedCategoryId = category.id
+                                        showCategoryError = false
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    },
+                                    modifier = Modifier.height(48.dp),
+                                    label = {
+                                        Text(
+                                            category.name,
+                                            maxLines = 1,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    },
+                                    leadingIcon = if (isSelected) {
+                                        {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    } else null,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = chipColor.copy(alpha = 0.2f),
+                                        selectedLabelColor = chipColor,
+                                        selectedLeadingIconColor = chipColor,
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        borderColor = MaterialTheme.colorScheme.outlineVariant,
+                                        selectedBorderColor = chipColor,
+                                        enabled = true,
+                                        selected = isSelected
+                                    ),
+                                    shape = RoundedCornerShape(50)
+                                )
                             }
+                        }
 
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                val hasPermission = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) == PackageManager.PERMISSION_GRANTED
+                        if (quickCategories.isEmpty()) {
+                            EmptyState(
+                                title = "No categories yet",
+                                message = "Create a category in Settings, then come back to start tracking.",
+                                icon = Icons.Default.Category,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
 
-                                if (!hasPermission) {
-                                    showPermissionDialog = true
-                                    return@PrimaryCta
-                                }
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = sessionTitle,
+                            onValueChange = {
+                                sessionTitle = it
+                                showTitleError = false
+                            },
+                            label = {
+                                Text("What are you working on? (optional)")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = MaterialTheme.shapes.medium
+                        )
+                    } else {
+                        GhostCta(
+                            text = "Park a thought",
+                            icon = Icons.Default.Lightbulb,
+                            onClick = {
+                                parkedText = ""
+                                showParkDialog = true
                             }
+                        )
 
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.startSession(sessionTitle, selectedCategoryId)
-                        }
-                    )
-                } else {
-                    DangerCta(
-                        text = "Stop",
-                        icon = Icons.Default.Stop,
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.stopSession()
-                            sessionTitle = ""
-                            selectedCategoryId = 0L
-                        }
-                    )
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    GhostCta(
-                        text = "Park a thought",
-                        icon = Icons.Default.Lightbulb,
-                        onClick = {
-                            parkedText = ""
-                            showParkDialog = true
+                        SurfaceCard(
+                            containerColor = animatedCategoryColor.copy(alpha = 0.08f),
+                            contentPadding = PaddingValues(20.dp)
+                        ) {
+                            DetailRow("Duration", String.format(
+                                java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds
+                            ))
+                            val catName = activeSession?.categoryId?.let { categories[it]?.name } ?: ""
+                            val sessionTitle = activeSession?.title ?: ""
+                            if (sessionTitle.isNotBlank() && sessionTitle != catName) {
+                                DetailRow("Title", sessionTitle)
+                            }
+                            if (catName.isNotBlank()) {
+                                DetailRow("Category", catName)
+                            }
+                            DetailRow("Started", java.time.Instant.ofEpochMilli(activeSession?.startTime ?: 0L)
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
                         }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    SurfaceCard(
-                        containerColor = animatedCategoryColor.copy(alpha = 0.08f),
-                        contentPadding = PaddingValues(20.dp)
-                    ) {
-                        DetailRow("Duration", String.format(
-                            java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, seconds
-                        ))
-                        if ((activeSession?.title ?: "").isNotBlank()) {
-                            DetailRow("Title", activeSession?.title ?: "")
-                        }
-                        val catName = activeSession?.categoryId?.let { categories[it]?.name } ?: ""
-                        if (catName.isNotBlank()) {
-                            DetailRow("Category", catName)
-                        }
-                        DetailRow("Started", java.time.Instant.ofEpochMilli(activeSession?.startTime ?: 0L)
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
                     }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                // The action that matters is pinned: you never have to scroll
+                // to start, stop or recover a running session.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
+                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                ) {
+                    if (!isRunning) {
+                        PrimaryCta(
+                            text = "Start tracking",
+                            icon = Icons.Default.PlayArrow,
+                            onClick = {
+                                if (selectedCategoryId == 0L) {
+                                    showCategoryError = true
+                                    return@PrimaryCta
+                                }
+
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    ) == PackageManager.PERMISSION_GRANTED
+
+                                    if (!hasPermission) {
+                                        showPermissionDialog = true
+                                        return@PrimaryCta
+                                    }
+                                }
+
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.startSession(sessionTitle, selectedCategoryId)
+                            }
+                        )
+                    } else {
+                        DangerCta(
+                            text = "Stop session",
+                            icon = Icons.Default.Stop,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.stopSession()
+                                sessionTitle = ""
+                                selectedCategoryId = 0L
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -610,8 +635,8 @@ private fun DangerCta(
             .clip(shape),
         shape = shape,
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.error,
-            contentColor = MaterialTheme.colorScheme.onError
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
         ),
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = 0.dp,

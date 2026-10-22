@@ -26,6 +26,10 @@ aqua → sky gradient and Manrope typography. See [RESEARCH/DESIGN.md](RESEARCH/
 - **Insights Center**: Personalized warnings and suggestions
 - **Our own targets and calibration**: set productive/learning minutes in Settings, or let the app calibrate from your trailing fortnight
 - **Export/Import**: JSON and CSV backup/restore
+- **Private device sync**: pair a phone and tablet with a QR code and sync
+  directly over your LAN or VPN, with authenticated AES-GCM encryption and no
+  cloud account. Categories, todos, subtasks and completed sessions/pomodoros
+  are synchronized
 - **Settings**: Profile, targets, privacy controls
 - **Soul Rings**: inner ring = today's tasks, outer ring = 7 day statuses
 - **Day Classification**: every day ends as Done / Tasks not met / Not
@@ -51,7 +55,8 @@ aqua → sky gradient and Manrope typography. See [RESEARCH/DESIGN.md](RESEARCH/
 
 ## Privacy
 
-- All data stays on your device
+- All data stays local unless you explicitly pair another device
+- Optional device sync is direct and end-to-end encrypted; no cloud relay
 - No cloud accounts
 - No telemetry or analytics
 - No ads
@@ -69,7 +74,7 @@ DailyTrack provides **educational insights and lifestyle indicators only**. It i
 
 - JDK 17+
 - Android SDK (compileSdk 35)
-- Gradle 8.11.1 (included via wrapper)
+- Gradle 9.5.0 (included via wrapper)
 
 ### Build Commands
 

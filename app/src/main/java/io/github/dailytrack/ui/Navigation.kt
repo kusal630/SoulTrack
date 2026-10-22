@@ -30,10 +30,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.navigation.NavHostController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.*
 import io.github.dailytrack.SoulTrackApp
@@ -113,8 +117,11 @@ fun DailyTrackNavHost() {
     val navController = rememberNavController()
     val context = LocalContext.current
     val app = context.applicationContext as SoulTrackApp
+    val haptic = LocalHapticFeedback.current
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
+    val widthDp = LocalConfiguration.current.screenWidthDp
+    val useRail = widthDp >= 600
 
     BackHandler(enabled = currentRoute != Screen.Dashboard.route) {
         navController.navigateToHome()
@@ -141,58 +148,47 @@ fun DailyTrackNavHost() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Scaffold(
-        bottomBar = {
-            Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-                Hairline()
-                NavigationBar(
+    val onSelect: (Screen) -> Unit = { screen ->
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (screen.route == Screen.Dashboard.route) {
+            navController.navigateToHome()
+        } else {
+            navController.navigate(screen.route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
+
+    if (useRail) {
+        // Medium and expanded windows use a rail: it keeps every destination
+        // one tap away without spending 80dp of vertical space on a bar that
+        // would otherwise stretch the full width of a tablet.
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            NavigationRail(
                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 0.dp
+                modifier = Modifier
+                    .width(88.dp)
+                    .fillMaxHeight(),
+                header = {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             ) {
                 bottomNavItems.forEach { screen ->
-                    val isSelected = currentRoute == screen.route
-                    val scale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.1f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        ),
-                        label = "nav_scale"
-                    )
-
-                    NavigationBarItem(
-                        icon = {
-                            Icon(
-                                screen.icon,
-                                contentDescription = screen.title,
-                                modifier = Modifier.scale(scale)
-                            )
-                        },
-                        label = {
-                            Text(
-                                screen.title,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                            )
-                        },
-                        selected = isSelected,
-                        onClick = {
-                            if (screen.route == Screen.Dashboard.route) {
-                                // Home is the graph start destination. Navigating to
-                                // it with saveState/restoreState is a no-op in
-                                // Navigation 2.8.x and can leave the user stuck on a
-                                // deep screen, so always pop straight back home.
-                                navController.navigateToHome()
-                            } else {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        colors = NavigationBarItemDefaults.colors(
+                    NavigationRailItem(
+                        selected = currentRoute == screen.route,
+                        onClick = { onSelect(screen) },
+                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        label = { Text(screen.title) },
+                        alwaysShowLabel = true,
+                        colors = NavigationRailItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
                             selectedTextColor = MaterialTheme.colorScheme.primary,
                             indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
@@ -201,81 +197,192 @@ fun DailyTrackNavHost() {
                         )
                     )
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                Hairline()
+                Spacer(modifier = Modifier.height(8.dp))
+                NavigationRailItem(
+                    selected = currentRoute == Screen.Explore.route,
+                    onClick = { onSelect(Screen.Explore) },
+                    icon = { Icon(Screen.Explore.icon, contentDescription = "Explore") },
+                    label = { Text("Explore") },
+                    alwaysShowLabel = true,
+                    colors = NavigationRailItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+                NavigationRailItem(
+                    selected = currentRoute == Screen.Settings.route,
+                    onClick = { onSelect(Screen.Settings) },
+                    icon = { Icon(Screen.Settings.icon, contentDescription = "Settings") },
+                    label = { Text("Settings") },
+                    alwaysShowLabel = true,
+                    colors = NavigationRailItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
             }
-            }
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+            )
+            AppNavHost(
+                navController = navController,
+                app = app,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            )
         }
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Dashboard.route,
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            composable(Screen.Dashboard.route) { DashboardScreen(navController) }
-            composable(Screen.Timer.route) { TimerScreen(navController) }
-            composable(Screen.Todo.route) { TodoScreen(navController) }
-            composable(Screen.Pomodoro.route) { PomodoroScreen(navController) }
-            composable(Screen.Insights.route) { InsightsScreen(navController) }
-            composable(Screen.Settings.route) { SettingsScreen(navController) }
-            composable(Screen.SavedQuotes.route) { SavedQuotesScreen(navController) }
-            composable(Screen.SyncSettings.route) {
-                SyncSettingsScreen(navController, app.syncManager)
+    } else {
+        Scaffold(
+            bottomBar = {
+                Column(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+                    Hairline()
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        tonalElevation = 0.dp
+                    ) {
+                        bottomNavItems.forEach { screen ->
+                            val isSelected = currentRoute == screen.route
+                            val scale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.1f else 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                ),
+                                label = "nav_scale"
+                            )
+
+                            NavigationBarItem(
+                                icon = {
+                                    Icon(
+                                        screen.icon,
+                                        contentDescription = screen.title,
+                                        modifier = Modifier.scale(scale)
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        screen.title,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                },
+                                selected = isSelected,
+                                onClick = { onSelect(screen) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+                }
             }
-            composable(Screen.Explore.route) { ExploreScreen(navController) }
-            composable(Screen.History.route) { HistoryScreen(navController) }
-            composable(Screen.FocusMode.route) {
-                var focusActive by rememberSaveable { mutableStateOf(false) }
-                var focusSound by rememberSaveable { mutableStateOf("") }
-                FocusModeScreen(
-                    isFocusActive = focusActive,
-                    selectedSound = focusSound.ifEmpty { null },
-                    onToggleFocus = { focusActive = !focusActive },
-                    onSelectSound = { focusSound = it }
-                )
-            }
-            composable(Screen.Reminders.route) {
-                val viewModel: MainViewModel = viewModel()
-                val reminders by viewModel.reminders.collectAsState()
-                RemindersScreen(
-                    reminders = reminders,
-                    onAddReminder = viewModel::addReminder,
-                    onToggleReminder = viewModel::toggleReminder,
-                    onDeleteReminder = viewModel::deleteReminder
-                )
-            }
-            composable(Screen.WeeklyReport.route) {
-                val viewModel: MainViewModel = viewModel()
-                val weeklyData by viewModel.weeklyReport.collectAsState()
-                val productivityScore by viewModel.productivityScore.collectAsState()
-                WeeklyReportScreen(
-                    weeklyData = weeklyData,
-                    productivityScore = productivityScore
-                )
-            }
-            composable(Screen.Planner.route) { PlannerScreen(navController) }
+        ) { innerPadding ->
+            AppNavHost(
+                navController = navController,
+                app = app,
+                modifier = Modifier.padding(innerPadding)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppNavHost(
+    navController: NavHostController,
+    app: SoulTrackApp,
+    modifier: Modifier = Modifier
+) {
+    NavHost(
+        navController = navController,
+        startDestination = Screen.Dashboard.route,
+        modifier = modifier
+    ) {
+        composable(Screen.Dashboard.route) { DashboardScreen(navController) }
+        composable(Screen.Timer.route) { TimerScreen(navController) }
+        composable(Screen.Todo.route) { TodoScreen(navController) }
+        composable(Screen.Pomodoro.route) { PomodoroScreen(navController) }
+        composable(Screen.Insights.route) { InsightsScreen(navController) }
+        composable(Screen.Settings.route) { SettingsScreen(navController) }
+        composable(Screen.SavedQuotes.route) { SavedQuotesScreen(navController) }
+        composable(Screen.SyncSettings.route) {
+            SyncSettingsScreen(navController, app.syncManager)
+        }
+        composable(Screen.Explore.route) { ExploreScreen(navController) }
+        composable(Screen.History.route) { HistoryScreen(navController) }
+        composable(Screen.FocusMode.route) {
+            var focusActive by rememberSaveable { mutableStateOf(false) }
+            var focusSound by rememberSaveable { mutableStateOf("") }
+            FocusModeScreen(
+                isFocusActive = focusActive,
+                selectedSound = focusSound.ifEmpty { null },
+                onToggleFocus = { focusActive = !focusActive },
+                onSelectSound = { focusSound = it },
+                onBack = { navController.navigateToHome() }
+            )
+        }
+        composable(Screen.Reminders.route) {
+            val viewModel: MainViewModel = viewModel()
+            val reminders by viewModel.reminders.collectAsState()
+            RemindersScreen(
+                reminders = reminders,
+                onAddReminder = viewModel::addReminder,
+                onToggleReminder = viewModel::toggleReminder,
+                onDeleteReminder = viewModel::deleteReminder,
+                onBack = { navController.navigateToHome() }
+            )
+        }
+        composable(Screen.WeeklyReport.route) {
+            val viewModel: MainViewModel = viewModel()
+            val weeklyData by viewModel.weeklyReport.collectAsState()
+            val productivityScore by viewModel.productivityScore.collectAsState()
+            WeeklyReportScreen(
+                weeklyData = weeklyData,
+                productivityScore = productivityScore,
+                onBack = { navController.navigateToHome() }
+            )
+        }
+        composable(Screen.Planner.route) { PlannerScreen(navController) }
         composable(Screen.Projects.route) { ProjectsScreen(navController) }
         composable(Screen.LearningLoop.route) { LearningLoopScreen(navController) }
         composable(Screen.Compounding.route) { CompoundingScreen(navController) }
         composable(Screen.WeeklyReview.route) { WeeklyReviewScreen(navController) }
         composable(Screen.Achievements.route) {
-                val viewModel: MainViewModel = viewModel()
-                val userStats by viewModel.userStats.collectAsState()
-                val achievements by viewModel.achievements.collectAsState()
-                GamificationScreen(userStats = userStats, achievements = achievements)
-            }
-            composable(Screen.Habits.route) {
-                val viewModel: MainViewModel = viewModel()
-                val habits by viewModel.habits.collectAsState()
-                val completions by viewModel.habitCompletions.collectAsState()
-                HabitScreen(
-                    navController = navController,
-                    habits = habits,
-                    completions = completions,
-                    onAddHabit = viewModel::addHabit,
-                    onToggleHabit = viewModel::toggleHabit,
-                    onDeleteHabit = viewModel::deleteHabit
-                )
-            }
+            val viewModel: MainViewModel = viewModel()
+            val userStats by viewModel.userStats.collectAsState()
+            val achievements by viewModel.achievements.collectAsState()
+            GamificationScreen(
+                userStats = userStats,
+                achievements = achievements,
+                onBack = { navController.navigateToHome() }
+            )
+        }
+        composable(Screen.Habits.route) {
+            val viewModel: MainViewModel = viewModel()
+            val habits by viewModel.habits.collectAsState()
+            val completions by viewModel.habitCompletions.collectAsState()
+            HabitScreen(
+                navController = navController,
+                habits = habits,
+                completions = completions,
+                onAddHabit = viewModel::addHabit,
+                onToggleHabit = viewModel::toggleHabit,
+                onDeleteHabit = viewModel::deleteHabit
+            )
         }
     }
 }
-

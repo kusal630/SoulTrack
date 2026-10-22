@@ -33,6 +33,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -202,7 +205,10 @@ fun OnboardingScreen(onComplete: () -> Unit) {
         )
 
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxHeight()
+                .widthIn(max = Dimens.ContentMaxWidth),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -506,6 +512,7 @@ fun OnboardingPageContent(page: OnboardingPage) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 28.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -584,6 +591,7 @@ private fun OnboardingChoicePage(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 28.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -641,9 +649,7 @@ private fun ChoiceCard(
         BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     }
     SurfaceCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.34f),
+        modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
         containerColor = if (selected) {
@@ -671,6 +677,17 @@ private fun ChoiceCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                if (title == "Time & tasks") {
+                    Text(
+                        text = "Recommended",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(

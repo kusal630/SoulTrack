@@ -73,12 +73,14 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun WeeklyReportScreen(
     weeklyData: Map<LocalDate, TimeCoverage>,
-    productivityScore: Float
+    productivityScore: Float,
+    onBack: (() -> Unit)? = null
 ) {
     ScreenList(
         title = "Weekly report",
         subtitle = "How your last seven days stacked up",
-        onBack = null
+        onBack = onBack,
+        compact = true
     ) {
         item {
             ProductivityScoreCard(score = productivityScore)
@@ -210,7 +212,7 @@ private fun WeeklyOverviewCard(weeklyData: Map<LocalDate, TimeCoverage>) {
 
     ScreenSection(
         title = "Weekly overview",
-        subtitle = "Hours tracked across the week"
+        subtitle = "Where the week's hours went"
     ) {
         KeyValueRow(
             label = "Total tracked",
@@ -227,7 +229,7 @@ private fun WeeklyOverviewCard(weeklyData: Map<LocalDate, TimeCoverage>) {
             valueColor = ExerciseColor
         )
         KeyValueRow(
-            label = "Wasted",
+            label = "Wasted + unrecorded",
             value = "%.1fh".format(wastedHours),
             valueColor = WastedColor
         )

@@ -72,6 +72,7 @@ fun HabitScreen(
         title = "Habits",
         subtitle = "Small things, done daily",
         navController = navController,
+        compact = true,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
