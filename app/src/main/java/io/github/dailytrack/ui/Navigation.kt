@@ -23,6 +23,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -51,6 +52,8 @@ import io.github.dailytrack.ui.savedquotes.SavedQuotesScreen
 import io.github.dailytrack.ui.sync.SyncSettingsScreen
 import io.github.dailytrack.ui.habit.HabitScreen
 import io.github.dailytrack.ui.explore.ExploreScreen
+import io.github.dailytrack.ui.techniques.TechniqueDetailScreen
+import io.github.dailytrack.ui.techniques.TechniquesScreen
 import io.github.dailytrack.ui.focus.FocusModeScreen
 import io.github.dailytrack.ui.reminders.RemindersScreen
 import io.github.dailytrack.ui.history.HistoryScreen
@@ -74,6 +77,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object SyncSettings : Screen("sync_settings", "Sync", Icons.Default.Sync)
     data object Habits : Screen("habits", "Habits", Icons.Default.Flag)
     data object Explore : Screen("explore", "Explore", Icons.Default.Explore)
+    data object Techniques : Screen("techniques", "Techniques", Icons.AutoMirrored.Filled.MenuBook)
     data object FocusMode : Screen("focus_mode", "Focus", Icons.Default.CenterFocusStrong)
     data object Reminders : Screen("reminders", "Reminders", Icons.Default.Alarm)
     data object History : Screen("history", "History", Icons.Default.History)
@@ -313,6 +317,13 @@ private fun AppNavHost(
             SyncSettingsScreen(navController, app.syncManager)
         }
         composable(Screen.Explore.route) { ExploreScreen(navController) }
+        composable(Screen.Techniques.route) { TechniquesScreen(navController) }
+        composable("technique/{techniqueId}") { entry ->
+            TechniqueDetailScreen(
+                techniqueId = entry.arguments?.getString("techniqueId").orEmpty(),
+                navController = navController
+            )
+        }
         composable(Screen.History.route) { HistoryScreen(navController) }
         composable(Screen.FocusMode.route) {
             var focusActive by rememberSaveable { mutableStateOf(false) }

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +59,7 @@ private data class Destination(
 )
 
 private val mindDestinations = listOf(
+    Destination("Techniques", "Plan, focus and finish", Icons.AutoMirrored.Filled.MenuBook, Screen.Techniques.route, Color(0xFF7CF5C4)),
     Destination("Focus mode", "Block distractions", Icons.Default.CenterFocusStrong, Screen.FocusMode.route, Color(0xFF10B981)),
     Destination("Saved quotes", "Words that keep you going", Icons.Default.FormatQuote, Screen.SavedQuotes.route, Color(0xFF60A5FA)),
     Destination("Targets", "Your goals and features", Icons.Default.Flag, Screen.Settings.route, Color(0xFFA78BFA)),
